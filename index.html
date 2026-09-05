@@ -194,11 +194,11 @@
       <div class="section-title">生成</div>
       <div class="field">
         <label>点の数 <span class="val" id="valCount">1800</span></label>
-        <input type="range" id="count" min="50" max="8000" step="50" value="1800">
+        <input type="range" id="count" min="50" max="9600" step="50" value="1800">
       </div>
       <div class="field">
         <label>点の大きさ <span class="val" id="valSize">1.4</span></label>
-        <input type="range" id="size" min="0.3" max="6.0" step="0.1" value="1.4">
+        <input type="range" id="size" min="0.3" max="7.2" step="0.1" value="1.4">
       </div>
       <div class="field">
         <label>濃淡 ⇄ 輪郭 <span class="val" id="valBlend">0.50</span></label>
@@ -206,11 +206,11 @@
       </div>
       <div class="field">
         <label>コントラスト <span class="val" id="valGamma">1.10</span></label>
-        <input type="range" id="gamma" min="0.2" max="4.0" step="0.05" value="1.1">
+        <input type="range" id="gamma" min="0.2" max="4.8" step="0.05" value="1.1">
       </div>
       <div class="field">
         <label>密集幅(詰まり具合) <span class="val" id="valPack">1.70</span></label>
-        <input type="range" id="pack" min="0.7" max="5.0" step="0.05" value="1.7">
+        <input type="range" id="pack" min="0.7" max="6.0" step="0.05" value="1.7">
       </div>
       <div class="field">
         <label>サイズのばらつき(均等⇄ランダム) <span class="val" id="valVariance">0.30</span></label>
@@ -231,22 +231,22 @@
       <div id="sparkOptions">
         <div class="field">
           <label>スパークの本数 <span class="val" id="valSparkSpikes">4</span></label>
-          <input type="range" id="sparkSpikes" min="3" max="8" step="1" value="4">
+          <input type="range" id="sparkSpikes" min="3" max="10" step="1" value="4">
         </div>
         <div class="field">
           <label>スパークの鋭さ <span class="val" id="valSparkSharpness">0.18</span></label>
-          <input type="range" id="sparkSharpness" min="0.05" max="0.6" step="0.01" value="0.18">
+          <input type="range" id="sparkSharpness" min="0.05" max="0.72" step="0.01" value="0.18">
         </div>
       </div>
 
       <div class="section-title">発光</div>
       <div class="field">
         <label>にじみの強さ <span class="val" id="valHaloBlur">1.10</span></label>
-        <input type="range" id="haloBlur" min="0" max="3.0" step="0.05" value="1.1">
+        <input type="range" id="haloBlur" min="0" max="3.6" step="0.05" value="1.1">
       </div>
       <div class="field">
         <label>光の広がり <span class="val" id="valHaloSpread">1.90</span></label>
-        <input type="range" id="haloSpread" min="1.0" max="4.0" step="0.1" value="1.9">
+        <input type="range" id="haloSpread" min="1.0" max="4.8" step="0.1" value="1.9">
       </div>
       <div class="field">
         <label>ハローの不透明度 <span class="val" id="valHaloOpacity">0.50</span></label>
@@ -256,15 +256,26 @@
         <label>コアの不透明度 <span class="val" id="valCoreOpacity">0.95</span></label>
         <input type="range" id="coreOpacity" min="0" max="1" step="0.05" value="0.95">
       </div>
+      <div class="field">
+        <label>コアの輪郭のぼかし <span class="val" id="valCoreBlur">0.00</span></label>
+        <input type="range" id="coreBlur" min="0" max="3.6" step="0.05" value="0">
+      </div>
 
       <div class="section-title">色</div>
       <div class="field row">
-        <label>発光カラー</label>
-        <input type="color" id="color" value="#7fe0ff">
+        <label>コアの色</label>
+        <input type="color" id="coreColor" value="#ffffff">
       </div>
       <div class="field row">
-        <label><input type="checkbox" id="useGradient"> グラデーション先の色</label>
-        <input type="color" id="color2" value="#b98cff">
+        <label>発光(ハロー)の色</label>
+        <input type="color" id="haloColor" value="#7fe0ff">
+      </div>
+      <div class="field row">
+        <label><input type="checkbox" id="useGradient"> 点の中心から外側へグラデーション</label>
+      </div>
+      <div class="field row">
+        <label>グラデーション外側の色</label>
+        <input type="color" id="color2" value="#7fe0ff">
       </div>
       <div class="field row">
         <label><input type="checkbox" id="showRef" checked> 元画像を薄く表示</label>
@@ -273,7 +284,7 @@
       <div class="section-title">編集ツール</div>
       <div class="field">
         <label>消しゴムの大きさ <span class="val" id="valEraser">16</span></label>
-        <input type="range" id="eraserSize" min="4" max="60" step="1" value="16">
+        <input type="range" id="eraserSize" min="4" max="72" step="1" value="16">
       </div>
       <div class="field row split">
         <label>線の色</label>
@@ -281,7 +292,7 @@
       </div>
       <div class="field">
         <label>線の太さ <span class="val" id="valLineWidth">1.2</span></label>
-        <input type="range" id="lineWidth" min="0.3" max="4" step="0.1" value="1.2">
+        <input type="range" id="lineWidth" min="0.3" max="4.8" step="0.1" value="1.2">
       </div>
       <div class="field">
         <label>線のカーブ <span class="val" id="valLineCurve">0.20</span></label>
@@ -344,7 +355,9 @@
     haloSpread: document.getElementById('haloSpread'),
     haloOpacity: document.getElementById('haloOpacity'),
     coreOpacity: document.getElementById('coreOpacity'),
-    color: document.getElementById('color'),
+    coreBlur: document.getElementById('coreBlur'),
+    coreColor: document.getElementById('coreColor'),
+    haloColor: document.getElementById('haloColor'),
     useGradient: document.getElementById('useGradient'),
     color2: document.getElementById('color2'),
     showRef: document.getElementById('showRef'),
@@ -364,6 +377,7 @@
     haloSpread: document.getElementById('valHaloSpread'),
     haloOpacity: document.getElementById('valHaloOpacity'),
     coreOpacity: document.getElementById('valCoreOpacity'),
+    coreBlur: document.getElementById('valCoreBlur'),
     sparkSpikes: document.getElementById('valSparkSpikes'),
     sparkSharpness: document.getElementById('valSparkSharpness'),
     eraserSize: document.getElementById('valEraser'),
@@ -398,7 +412,7 @@
 
   function refreshAllLabels(){
     fmt('count',0); fmt('size',1); fmt('blend',2); fmt('gamma',2); fmt('pack',2); fmt('variance',2);
-    fmt('haloBlur',2); fmt('haloSpread',2); fmt('haloOpacity',2); fmt('coreOpacity',2); fmt('sparkSpikes',0); fmt('sparkSharpness',2);
+    fmt('haloBlur',2); fmt('haloSpread',2); fmt('haloOpacity',2); fmt('coreOpacity',2); fmt('coreBlur',2); fmt('sparkSpikes',0); fmt('sparkSharpness',2);
     fmt('eraserSize',0); fmt('lineWidth',1); fmt('lineCurve',2);
     refImg.style.display = controls.showRef.checked ? '' : 'none';
   }
@@ -538,17 +552,6 @@
     return points;
   }
 
-  function hexToRgb(hex){
-    var v = parseInt(hex.replace('#',''), 16);
-    return [(v>>16)&255, (v>>8)&255, v&255];
-  }
-  function lerpColor(hexA, hexB, t){
-    var a = hexToRgb(hexA), b = hexToRgb(hexB);
-    var r = Math.round(a[0]+(b[0]-a[0])*t);
-    var g = Math.round(a[1]+(b[1]-a[1])*t);
-    var bl = Math.round(a[2]+(b[2]-a[2])*t);
-    return 'rgb('+r+','+g+','+bl+')';
-  }
   function inErasedRegion(x,y){
     for (var i=0;i<eraseRegions.length;i++){
       var e = eraseRegions[i];
@@ -605,13 +608,15 @@
 
     var baseR = parseFloat(controls.size.value);
     var variance = parseFloat(controls.variance.value);
-    var color1 = controls.color.value;
+    var coreColor = controls.coreColor.value;
+    var haloColor = controls.haloColor.value;
     var color2 = controls.color2.value;
     var useGradient = controls.useGradient.checked;
     var haloBlur = parseFloat(controls.haloBlur.value);
     var haloSpread = parseFloat(controls.haloSpread.value);
     var haloOpacity = parseFloat(controls.haloOpacity.value);
     var coreOpacity = parseFloat(controls.coreOpacity.value);
+    var coreBlur = parseFloat(controls.coreBlur.value);
     var dotShape = controls.dotShape.value;
     var sparkSpikes = parseInt(controls.sparkSpikes.value, 10);
     var sparkSharpness = parseFloat(controls.sparkSharpness.value);
@@ -637,15 +642,13 @@
       var pt = allPoints[k];
       var sizeMul = 1 + (pt.sizeRand - 1) * variance;
       var rr = baseR * (0.7 + 0.6*pt.d) * sizeMul;
-      var fillAttr = '';
-      if (useGradient) fillAttr = ' fill="'+lerpColor(color1, color2, pt.d)+'"';
       if (dotShape === 'spark'){
         var rot = pt.rot || 0;
-        circlesHalo += '<polygon points="'+sparkPolygon(pt.x, pt.y, rr*haloSpread*1.6, rot)+'"'+fillAttr+'/>';
-        circlesCore += '<polygon points="'+sparkPolygon(pt.x, pt.y, rr*1.6, rot)+'"'+fillAttr+'/>';
+        circlesHalo += '<polygon points="'+sparkPolygon(pt.x, pt.y, rr*haloSpread*1.6, rot)+'"/>';
+        circlesCore += '<polygon points="'+sparkPolygon(pt.x, pt.y, rr*1.6, rot)+'"/>';
       } else {
-        circlesHalo += '<circle cx="'+pt.x.toFixed(1)+'" cy="'+pt.y.toFixed(1)+'" r="'+(rr*haloSpread).toFixed(2)+'"'+fillAttr+'/>';
-        circlesCore += '<circle cx="'+pt.x.toFixed(1)+'" cy="'+pt.y.toFixed(1)+'" r="'+rr.toFixed(2)+'"'+fillAttr+'/>';
+        circlesHalo += '<circle cx="'+pt.x.toFixed(1)+'" cy="'+pt.y.toFixed(1)+'" r="'+(rr*haloSpread).toFixed(2)+'"/>';
+        circlesCore += '<circle cx="'+pt.x.toFixed(1)+'" cy="'+pt.y.toFixed(1)+'" r="'+rr.toFixed(2)+'"/>';
       }
     }
 
@@ -664,13 +667,31 @@
       linesSvg += '<path d="M'+ln.x1.toFixed(1)+','+ln.y1.toFixed(1)+' Q'+cx.toFixed(1)+','+cy.toFixed(1)+' '+ln.x2.toFixed(1)+','+ln.y2.toFixed(1)+'" fill="none" stroke="'+lc+'" stroke-width="'+lw+'" stroke-linecap="round" opacity="0.85"/>';
     }
 
+    // "点の中心から外側へグラデーション": a per-dot radial gradient, not a
+    // whole-image color blend. Using the default objectBoundingBox units,
+    // ONE <radialGradient> definition is reused by every core mark, but each
+    // mark gets its own independent center→edge gradient scaled to its own
+    // bounding box — i.e. each individual point glows from its own center.
+    var gradDef = useGradient
+      ? '<radialGradient id="dotGrad" cx="50%" cy="50%" r="50%">' +
+          '<stop offset="0%" stop-color="'+coreColor+'"/>' +
+          '<stop offset="100%" stop-color="'+color2+'"/>' +
+        '</radialGradient>'
+      : '';
+    var coreFill = useGradient ? 'url(#dotGrad)' : coreColor;
+
     var svg =
       '<svg viewBox="0 0 '+srcW+' '+srcH+'" xmlns="http://www.w3.org/2000/svg">' +
-        '<defs><filter id="dotBlur" x="-100%" y="-100%" width="300%" height="300%">' +
-          '<feGaussianBlur stdDeviation="'+(baseR*haloBlur || 0.001).toFixed(2)+'"/></filter></defs>' +
+        '<defs>' +
+          '<filter id="dotBlur" x="-100%" y="-100%" width="300%" height="300%">' +
+            '<feGaussianBlur stdDeviation="'+(baseR*haloBlur || 0.001).toFixed(2)+'"/></filter>' +
+          '<filter id="coreBlurFilter" x="-100%" y="-100%" width="300%" height="300%">' +
+            '<feGaussianBlur stdDeviation="'+(baseR*coreBlur || 0.001).toFixed(2)+'"/></filter>' +
+          gradDef +
+        '</defs>' +
         '<g stroke="none">'+linesSvg+'</g>' +
-        '<g fill="'+color1+'" opacity="'+haloOpacity+'" filter="url(#dotBlur)">'+circlesHalo+'</g>' +
-        '<g fill="'+color1+'" opacity="'+coreOpacity+'">'+circlesCore+'</g>' +
+        '<g fill="'+haloColor+'" opacity="'+haloOpacity+'" filter="url(#dotBlur)">'+circlesHalo+'</g>' +
+        '<g fill="'+coreFill+'" opacity="'+coreOpacity+'" filter="url(#coreBlurFilter)">'+circlesCore+'</g>' +
       '</svg>';
 
     outputStage.innerHTML = svg;
@@ -695,7 +716,7 @@
   Object.keys(controls).forEach(function(key){
     controls[key].addEventListener('input', function(){
       fmt('count',0); fmt('size',1); fmt('blend',2); fmt('gamma',2); fmt('pack',2); fmt('variance',2);
-      fmt('haloBlur',2); fmt('haloSpread',2); fmt('haloOpacity',2); fmt('coreOpacity',2); fmt('sparkSpikes',0); fmt('sparkSharpness',2);
+      fmt('haloBlur',2); fmt('haloSpread',2); fmt('haloOpacity',2); fmt('coreOpacity',2); fmt('coreBlur',2); fmt('sparkSpikes',0); fmt('sparkSharpness',2);
       fmt('eraserSize',0); fmt('lineWidth',1); fmt('lineCurve',2);
       debounce(GENERATION_KEYS[key] ? regenerateAuto : render);
     });
