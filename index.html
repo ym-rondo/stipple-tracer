@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>点描トレーサー</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+  :root{
+    --bg:#03050b;
+    --bg-panel:#080d18;
+    --line:#1a2637;
+    --text:#cfe4f7;
+    --text-dim:#5f7c93;
+    --accent:#63d6ff;
+  }
+  *{box-sizing:border-box;}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:"Zen Kaku Gothic New","Hiragino Kaku Gothic ProN","Hiragino Sans",sans-serif;
+  }
+  .page{
+    display:flex;
+    flex-direction:column;
+    gap:16px;
+    max-width:1120px;
+    margin:0 auto;
+    padding:26px 22px 44px;
+  }
+  header{ display:flex; flex-direction:column; gap:4px; border-bottom:1px solid var(--line); padding-bottom:14px; }
+  header .eyebrow{
+    font-family:"JetBrains Mono",monospace;
+    font-size:10.5px;
+    letter-spacing:.14em;
+    color:var(--text-dim);
+    text-transform:uppercase;
+  }
+  header h1{ margin:0; font-size:20px; font-weight:700; letter-spacing:.02em; }
+  header p{ margin:2px 0 0; font-size:13px; color:var(--text-dim); max-width:64ch; line-height:1.6; }
+
+  main{ display:grid; grid-template-columns:1fr 300px; gap:16px; align-items:start; }
+  @media (max-width:820px){ main{ grid-template-columns:1fr; } }
+
+  .stage-col{ display:flex; flex-direction:column; gap:8px; }
+
+  .toolbar{ display:flex; gap:6px; flex-wrap:wrap; }
+  .tool{
+    font-family:"JetBrains Mono",monospace;
+    font-size:11px;
+    padding:7px 10px;
+    border:1px solid var(--line);
+    border-radius:4px;
+    color:var(--text-dim);
+    background:rgba(255,255,255,.02);
+    cursor:pointer;
+  }
+  .tool[aria-pressed="true"]{ color:var(--bg); background:var(--accent); border-color:var(--accent); }
+  .tool.ghost{ margin-left:auto; }
+
+  .stage-wrap{
+    position:relative;
+    width:100%;
+    aspect-ratio:1/1;
+    background:
+      radial-gradient(ellipse 75% 65% at 50% 45%, rgba(60,150,200,.14), rgba(3,5,11,0) 68%),
+      var(--bg-panel);
+    border:1px solid var(--line);
+    border-radius:6px;
+    overflow:hidden;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    touch-action:none;
+  }
+  .stage-wrap.dragover{ border-color:var(--accent); }
+  .stage-wrap.mode-erase, .stage-wrap.mode-add, .stage-wrap.mode-line{ cursor:crosshair; }
+  #refImg{
+    position:absolute; inset:0; width:100%; height:100%;
+    object-fit:contain; opacity:.14; pointer-events:none;
+  }
+  #outputStage{ position:relative; width:92%; height:92%; }
+  #outputStage svg{ width:100%; height:100%; display:block; }
+
+  .hint{
+    position:absolute; top:10px; left:12px; right:12px;
+    font-size:11px; color:var(--text-dim); letter-spacing:.02em;
+    pointer-events:none;
+  }
+
+  .panel{
+    display:flex; flex-direction:column; gap:12px;
+    background:var(--bg-panel);
+    border:1px solid var(--line);
+    border-radius:6px;
+    padding:16px;
+  }
+  .section-title{
+    font-family:"JetBrains Mono",monospace;
+    font-size:10px; letter-spacing:.12em; text-transform:uppercase;
+    color:var(--accent); margin:4px 0 -2px;
+  }
+  .field{ display:flex; flex-direction:column; gap:5px; }
+  .field label{ font-size:11.5px; color:var(--text-dim); display:flex; justify-content:space-between; }
+  .field label .val{ font-family:"JetBrains Mono",monospace; color:var(--text); }
+  .field input[type="range"]{ width:100%; accent-color:var(--accent); }
+  .field.row{ flex-direction:row; align-items:center; justify-content:space-between; }
+  .field.row label{ display:flex; align-items:center; gap:8px; font-size:12px; }
+  .field.row.split{ gap:10px; }
+  input[type="color"]{
+    width:36px; height:24px; border:1px solid var(--line); border-radius:3px;
+    background:none; padding:0; cursor:pointer;
+  }
+  .btn{
+    font-family:"JetBrains Mono",monospace;
+    font-size:11.5px;
+    padding:9px 12px;
+    border:1px solid var(--line);
+    border-radius:4px;
+    color:var(--text);
+    background:rgba(255,255,255,.02);
+    cursor:pointer;
+    text-align:center;
+  }
+  .btn:hover{ border-color:var(--accent); color:var(--accent); }
+  .btn.primary{ background:var(--accent); color:var(--bg); border-color:var(--accent); font-weight:500; }
+  .btn.primary:hover{ opacity:.9; color:var(--bg); }
+  .status{ font-size:11px; color:var(--text-dim); font-family:"JetBrains Mono",monospace; }
+  .divider{ height:1px; background:var(--line); margin:2px 0; }
+</style>
+</head>
+<body>
+
+
+<div class="page">
+  <header>
+    <span class="eyebrow">Image → Dotted-Light SVG</span>
+    <h1>点描トレーサー</h1>
+    <p>画像を1枚渡すと、その形をなぞる「光の点描画」としてSVGを生成します。消しゴム・追加ペン・星座線で手直しもできます。</p>
+  </header>
+
+  <main>
+    <div class="stage-col">
+      <div class="toolbar">
+        <button class="tool" data-mode="view" aria-pressed="true">選択</button>
+        <button class="tool" data-mode="erase" aria-pressed="false">消しゴム</button>
+        <button class="tool" data-mode="add" aria-pressed="false">追加</button>
+        <button class="tool" data-mode="line" aria-pressed="false">線(星座)</button>
+        <button class="tool ghost" id="clearManualBtn">手動編集をクリア</button>
+      </div>
+      <div class="stage-wrap" id="stageWrap">
+        <img id="refImg" alt="">
+        <div id="outputStage"></div>
+        <div class="hint" id="hintText">画像をドラッグ&ドロップ、または右の「画像を選ぶ」</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <button class="btn primary" id="pickBtn">画像を選ぶ</button>
+      <input type="file" id="fileInput" accept="image/*" style="display:none">
+
+      <div class="section-title">生成</div>
+      <div class="field">
+        <label>点の数 <span class="val" id="valCount">1800</span></label>
+        <input type="range" id="count" min="50" max="8000" step="50" value="1800">
+      </div>
+      <div class="field">
+        <label>点の大きさ <span class="val" id="valSize">1.4</span></label>
+        <input type="range" id="size" min="0.3" max="6.0" step="0.1" value="1.4">
+      </div>
+      <div class="field">
+        <label>濃淡 ⇄ 輪郭 <span class="val" id="valBlend">0.50</span></label>
+        <input type="range" id="blend" min="0" max="1" step="0.05" value="0.5">
+      </div>
+      <div class="field">
+        <label>コントラスト <span class="val" id="valGamma">1.10</span></label>
+        <input type="range" id="gamma" min="0.2" max="4.0" step="0.05" value="1.1">
+      </div>
+      <div class="field">
+        <label>密集幅(詰まり具合) <span class="val" id="valPack">1.70</span></label>
+        <input type="range" id="pack" min="0.7" max="5.0" step="0.05" value="1.7">
+      </div>
+      <div class="field">
+        <label>サイズのばらつき(均等⇄ランダム) <span class="val" id="valVariance">0.30</span></label>
+        <input type="range" id="variance" min="0" max="1" step="0.05" value="0.3">
+      </div>
+      <div class="field row">
+        <label><input type="checkbox" id="brightMode"> 明るい部分を点にする(既定は暗い部分)</label>
+      </div>
+
+      <div class="section-title">発光</div>
+      <div class="field">
+        <label>にじみの強さ <span class="val" id="valHaloBlur">1.10</span></label>
+        <input type="range" id="haloBlur" min="0" max="3.0" step="0.05" value="1.1">
+      </div>
+      <div class="field">
+        <label>光の広がり <span class="val" id="valHaloSpread">1.90</span></label>
+        <input type="range" id="haloSpread" min="1.0" max="4.0" step="0.1" value="1.9">
+      </div>
+      <div class="field">
+        <label>ハローの不透明度 <span class="val" id="valHaloOpacity">0.50</span></label>
+        <input type="range" id="haloOpacity" min="0" max="1" step="0.05" value="0.5">
+      </div>
+      <div class="field">
+        <label>コアの不透明度 <span class="val" id="valCoreOpacity">0.95</span></label>
+        <input type="range" id="coreOpacity" min="0" max="1" step="0.05" value="0.95">
+      </div>
+
+      <div class="section-title">色</div>
+      <div class="field row">
+        <label>発光カラー</label>
+        <input type="color" id="color" value="#7fe0ff">
+      </div>
+      <div class="field row">
+        <label><input type="checkbox" id="useGradient"> グラデーション先の色</label>
+        <input type="color" id="color2" value="#b98cff">
+      </div>
+      <div class="field row">
+        <label><input type="checkbox" id="showRef" checked> 元画像を薄く表示</label>
+      </div>
+
+      <div class="section-title">編集ツール</div>
+      <div class="field">
+        <label>消しゴムの大きさ <span class="val" id="valEraser">16</span></label>
+        <input type="range" id="eraserSize" min="4" max="60" step="1" value="16">
+      </div>
+      <div class="field row split">
+        <label>線の色</label>
+        <input type="color" id="lineColor" value="#eaf9ff">
+      </div>
+      <div class="field">
+        <label>線の太さ <span class="val" id="valLineWidth">1.2</span></label>
+        <input type="range" id="lineWidth" min="0.3" max="4" step="0.1" value="1.2">
+      </div>
+      <div class="field">
+        <label>線のカーブ <span class="val" id="valLineCurve">0.20</span></label>
+        <input type="range" id="lineCurve" min="0" max="1" step="0.05" value="0.2">
+      </div>
+
+      <div class="divider"></div>
+
+      <button class="btn" id="reshuffleBtn">再生成</button>
+      <button class="btn" id="saveBtn">SVGを保存</button>
+      <div class="status" id="status">点の数: —</div>
+    </div>
+  </main>
+</div>
+
+<script>
+(function(){
+  var WORK_MAX = 420;
+
+  var srcCanvas = document.createElement('canvas');
+  var srcCtx = srcCanvas.getContext('2d', { willReadFrequently: true });
+  var srcW = 0, srcH = 0;
+  var lastDataURL = '';
+  var currentPoints = []; // last rendered {x,y,r,d} for line-tool snapping
+
+  // persistent manual-edit state (survives regeneration / slider changes)
+  var eraseRegions = [];   // {x,y,r}
+  var manualPoints = [];   // {x,y,r,sizeRand}
+  var manualLines = [];    // {x1,y1,x2,y2}
+
+  var refImg = document.getElementById('refImg');
+  var outputStage = document.getElementById('outputStage');
+  var stageWrap = document.getElementById('stageWrap');
+  var statusEl = document.getElementById('status');
+  var hintText = document.getElementById('hintText');
+
+  var controls = {
+    count: document.getElementById('count'),
+    size: document.getElementById('size'),
+    blend: document.getElementById('blend'),
+    gamma: document.getElementById('gamma'),
+    pack: document.getElementById('pack'),
+    variance: document.getElementById('variance'),
+    brightMode: document.getElementById('brightMode'),
+    haloBlur: document.getElementById('haloBlur'),
+    haloSpread: document.getElementById('haloSpread'),
+    haloOpacity: document.getElementById('haloOpacity'),
+    coreOpacity: document.getElementById('coreOpacity'),
+    color: document.getElementById('color'),
+    useGradient: document.getElementById('useGradient'),
+    color2: document.getElementById('color2'),
+    showRef: document.getElementById('showRef'),
+    eraserSize: document.getElementById('eraserSize'),
+    lineColor: document.getElementById('lineColor'),
+    lineWidth: document.getElementById('lineWidth'),
+    lineCurve: document.getElementById('lineCurve')
+  };
+  var valEls = {
+    count: document.getElementById('valCount'),
+    size: document.getElementById('valSize'),
+    blend: document.getElementById('valBlend'),
+    gamma: document.getElementById('valGamma'),
+    pack: document.getElementById('valPack'),
+    variance: document.getElementById('valVariance'),
+    haloBlur: document.getElementById('valHaloBlur'),
+    haloSpread: document.getElementById('valHaloSpread'),
+    haloOpacity: document.getElementById('valHaloOpacity'),
+    coreOpacity: document.getElementById('valCoreOpacity'),
+    eraserSize: document.getElementById('valEraser'),
+    lineWidth: document.getElementById('valLineWidth'),
+    lineCurve: document.getElementById('valLineCurve')
+  };
+
+  function fmt(id, digits){
+    var el = valEls[id];
+    if (el) el.textContent = parseFloat(controls[id].value).toFixed(digits);
+  }
+
+  // ---------------------------------------------------------------- math --
+  function sobelMagnitude(lum, w, h){
+    var mag = new Float32Array(w*h);
+    var max = 0.0001;
+    for (var y=1; y<h-1; y++){
+      for (var x=1; x<w-1; x++){
+        var i = y*w+x;
+        var gx = -lum[i-w-1] + lum[i-w+1] - 2*lum[i-1] + 2*lum[i+1] - lum[i+w-1] + lum[i+w+1];
+        var gy = -lum[i-w-1] - 2*lum[i-w] - lum[i-w+1] + lum[i+w-1] + 2*lum[i+w] + lum[i+w+1];
+        var m = Math.sqrt(gx*gx + gy*gy);
+        mag[i] = m;
+        if (m > max) max = m;
+      }
+    }
+    for (var k=0; k<mag.length; k++) mag[k] /= max;
+    return mag;
+  }
+
+  function ditherPoints(density, w, h, count, packK){
+    var maxAttempts = count * 60;
+    var area = w*h;
+    var minDist = Math.sqrt(area / (count * packK));
+    var cell = Math.max(1, minDist);
+    var cols = Math.ceil(w/cell) + 1;
+    var rows = Math.ceil(h/cell) + 1;
+    var grid = new Array(cols*rows);
+    function idxOf(cx,cy){ return cy*cols+cx; }
+    var points = [];
+    var attempts = 0;
+    while (points.length < count && attempts < maxAttempts){
+      attempts++;
+      var x = Math.random()*w, y = Math.random()*h;
+      var px = Math.min(w-1, Math.max(0, x|0));
+      var py = Math.min(h-1, Math.max(0, y|0));
+      var d = density[py*w+px];
+      if (Math.random() > d) continue;
+      var cx = (x/cell)|0, cy = (y/cell)|0;
+      var ok = true;
+      for (var gy=Math.max(0,cy-1); gy<=Math.min(rows-1,cy+1) && ok; gy++){
+        for (var gx=Math.max(0,cx-1); gx<=Math.min(cols-1,cx+1) && ok; gx++){
+          var bucket = grid[idxOf(gx,gy)];
+          if (!bucket) continue;
+          for (var i=0;i<bucket.length;i++){
+            var p = bucket[i];
+            var dx = p.x-x, dy = p.y-y;
+            if (dx*dx+dy*dy < minDist*minDist){ ok=false; break; }
+          }
+        }
+      }
+      if (!ok) continue;
+      var gi = idxOf(cx,cy);
+      if (!grid[gi]) grid[gi] = [];
+      var pt = { x:x, y:y, d:density[py*w+px], sizeRand: 0.3 + Math.random()*1.5 };
+      grid[gi].push(pt);
+      points.push(pt);
+    }
+    return points;
+  }
+
+  function hexToRgb(hex){
+    var v = parseInt(hex.replace('#',''), 16);
+    return [(v>>16)&255, (v>>8)&255, v&255];
+  }
+  function lerpColor(hexA, hexB, t){
+    var a = hexToRgb(hexA), b = hexToRgb(hexB);
+    var r = Math.round(a[0]+(b[0]-a[0])*t);
+    var g = Math.round(a[1]+(b[1]-a[1])*t);
+    var bl = Math.round(a[2]+(b[2]-a[2])*t);
+    return 'rgb('+r+','+g+','+bl+')';
+  }
+  function inErasedRegion(x,y){
+    for (var i=0;i<eraseRegions.length;i++){
+      var e = eraseRegions[i];
+      var dx=e.x-x, dy=e.y-y;
+      if (dx*dx+dy*dy < e.r*e.r) return true;
+    }
+    return false;
+  }
+
+  // -------------------------------------------------------------- render --
+  var cachedAutoPoints = [];
+
+  // Recomputes the auto-generated point cloud from the image (expensive-ish,
+  // and re-rolls randomness). Only call this for controls that change WHAT
+  // gets traced (count/blend/gamma/pack/brightMode), on image load, or on
+  // an explicit "reshuffle" — never from erase/add/line editing, which must
+  // leave the rest of the cloud untouched.
+  function regenerateAuto(){
+    if (!srcW || !srcH) return;
+    var img = srcCtx.getImageData(0,0,srcW,srcH).data;
+    var n = srcW*srcH;
+    var lum = new Float32Array(n);
+    for (var p=0; p<n; p++){
+      var r=img[p*4], g=img[p*4+1], b=img[p*4+2];
+      lum[p] = (0.299*r + 0.587*g + 0.114*b) / 255;
+    }
+    var edge = sobelMagnitude(lum, srcW, srcH);
+
+    var brightMode = controls.brightMode.checked;
+    var blend = parseFloat(controls.blend.value);
+    var gamma = parseFloat(controls.gamma.value);
+    var density = new Float32Array(n);
+    for (var i=0;i<n;i++){
+      var shade = brightMode ? lum[i] : (1-lum[i]);
+      var v = shade*(1-blend) + edge[i]*blend;
+      v = Math.max(0, Math.min(1, v));
+      density[i] = Math.pow(v, gamma);
+    }
+
+    var count = parseInt(controls.count.value, 10);
+    var packK = parseFloat(controls.pack.value);
+    cachedAutoPoints = ditherPoints(density, srcW, srcH, count, packK);
+    render();
+  }
+
+  // Rebuilds the SVG from the cached auto cloud + manual edits + current
+  // style settings, WITHOUT touching point positions. Safe to call as
+  // often as needed (erase drag, style sliders, etc).
+  function render(){
+    if (!srcW || !srcH) return;
+    var autoPoints = cachedAutoPoints.filter(function(pt){ return !inErasedRegion(pt.x, pt.y); });
+    var allPoints = autoPoints.concat(manualPoints.filter(function(pt){ return !inErasedRegion(pt.x, pt.y); }));
+    currentPoints = allPoints;
+
+    var baseR = parseFloat(controls.size.value);
+    var variance = parseFloat(controls.variance.value);
+    var color1 = controls.color.value;
+    var color2 = controls.color2.value;
+    var useGradient = controls.useGradient.checked;
+    var haloBlur = parseFloat(controls.haloBlur.value);
+    var haloSpread = parseFloat(controls.haloSpread.value);
+    var haloOpacity = parseFloat(controls.haloOpacity.value);
+    var coreOpacity = parseFloat(controls.coreOpacity.value);
+
+    var circlesHalo = '', circlesCore = '';
+    for (var k=0;k<allPoints.length;k++){
+      var pt = allPoints[k];
+      var sizeMul = 1 + (pt.sizeRand - 1) * variance;
+      var rr = baseR * (0.7 + 0.6*pt.d) * sizeMul;
+      var fillAttr = '';
+      if (useGradient) fillAttr = ' fill="'+lerpColor(color1, color2, pt.d)+'"';
+      circlesHalo += '<circle cx="'+pt.x.toFixed(1)+'" cy="'+pt.y.toFixed(1)+'" r="'+(rr*haloSpread).toFixed(2)+'"'+fillAttr+'/>';
+      circlesCore += '<circle cx="'+pt.x.toFixed(1)+'" cy="'+pt.y.toFixed(1)+'" r="'+rr.toFixed(2)+'"'+fillAttr+'/>';
+    }
+
+    var linesSvg = '';
+    var lw = parseFloat(controls.lineWidth.value);
+    var lc = controls.lineColor.value;
+    for (var li=0; li<manualLines.length; li++){
+      var ln = manualLines[li];
+      var mx=(ln.x1+ln.x2)/2, my=(ln.y1+ln.y2)/2;
+      var dx=ln.x2-ln.x1, dy=ln.y2-ln.y1;
+      var dist = Math.sqrt(dx*dx+dy*dy) || 1;
+      var px=-dy/dist, py=dx/dist;
+      var curve = parseFloat(controls.lineCurve.value);
+      var cx = mx + px*curve*dist*0.5;
+      var cy = my + py*curve*dist*0.5;
+      linesSvg += '<path d="M'+ln.x1.toFixed(1)+','+ln.y1.toFixed(1)+' Q'+cx.toFixed(1)+','+cy.toFixed(1)+' '+ln.x2.toFixed(1)+','+ln.y2.toFixed(1)+'" fill="none" stroke="'+lc+'" stroke-width="'+lw+'" stroke-linecap="round" opacity="0.85"/>';
+    }
+
+    var svg =
+      '<svg viewBox="0 0 '+srcW+' '+srcH+'" xmlns="http://www.w3.org/2000/svg">' +
+        '<defs><filter id="dotBlur" x="-100%" y="-100%" width="300%" height="300%">' +
+          '<feGaussianBlur stdDeviation="'+(baseR*haloBlur || 0.001).toFixed(2)+'"/></filter></defs>' +
+        '<g stroke="none">'+linesSvg+'</g>' +
+        '<g fill="'+color1+'" opacity="'+haloOpacity+'" filter="url(#dotBlur)">'+circlesHalo+'</g>' +
+        '<g fill="'+color1+'" opacity="'+coreOpacity+'">'+circlesCore+'</g>' +
+      '</svg>';
+
+    outputStage.innerHTML = svg;
+    lastDataURL = svg;
+    statusEl.textContent = '点の数: ' + allPoints.length + ' (自動 ' + autoPoints.length + ' / 手動 ' + manualPoints.length + ')';
+  }
+
+  var GENERATION_KEYS = { count:1, blend:1, gamma:1, pack:1, brightMode:1 };
+
+  var rafPending = false;
+  function scheduleRender(){
+    if (rafPending) return;
+    rafPending = true;
+    requestAnimationFrame(function(){ render(); rafPending = false; });
+  }
+  var debounceTimer = null;
+  function debounce(fn){
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(fn, 90);
+  }
+
+  Object.keys(controls).forEach(function(key){
+    controls[key].addEventListener('input', function(){
+      fmt('count',0); fmt('size',1); fmt('blend',2); fmt('gamma',2); fmt('pack',2); fmt('variance',2);
+      fmt('haloBlur',2); fmt('haloSpread',2); fmt('haloOpacity',2); fmt('coreOpacity',2);
+      fmt('eraserSize',0); fmt('lineWidth',1); fmt('lineCurve',2);
+      debounce(GENERATION_KEYS[key] ? regenerateAuto : render);
+    });
+  });
+  controls.showRef.addEventListener('change', function(){
+    refImg.style.display = controls.showRef.checked ? '' : 'none';
+  });
+
+  document.getElementById('reshuffleBtn').addEventListener('click', regenerateAuto);
+  document.getElementById('clearManualBtn').addEventListener('click', function(){
+    eraseRegions = []; manualPoints = []; manualLines = [];
+    render();
+  });
+
+  // ------------------------------------------------------------- loading --
+  function loadImageEl(imgEl){
+    var w = imgEl.naturalWidth || imgEl.width;
+    var h = imgEl.naturalHeight || imgEl.height;
+    var scale = Math.min(1, WORK_MAX / Math.max(w,h));
+    srcW = Math.max(1, Math.round(w*scale));
+    srcH = Math.max(1, Math.round(h*scale));
+    srcCanvas.width = srcW;
+    srcCanvas.height = srcH;
+    srcCtx.drawImage(imgEl, 0, 0, srcW, srcH);
+    refImg.src = imgEl.src;
+    eraseRegions = []; manualPoints = []; manualLines = [];
+    regenerateAuto();
+  }
+  function loadFile(file){
+    if (!file || file.type.indexOf('image/') !== 0) return;
+    var reader = new FileReader();
+    reader.onload = function(e){
+      var img = new Image();
+      img.onload = function(){ loadImageEl(img); };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  }
+  var fileInput = document.getElementById('fileInput');
+  document.getElementById('pickBtn').addEventListener('click', function(){ fileInput.click(); });
+  fileInput.addEventListener('change', function(e){
+    if (e.target.files && e.target.files[0]) loadFile(e.target.files[0]);
+  });
+  ['dragenter','dragover'].forEach(function(ev){
+    stageWrap.addEventListener(ev, function(e){ e.preventDefault(); stageWrap.classList.add('dragover'); });
+  });
+  ['dragleave','drop'].forEach(function(ev){
+    stageWrap.addEventListener(ev, function(e){ e.preventDefault(); stageWrap.classList.remove('dragover'); });
+  });
+  stageWrap.addEventListener('drop', function(e){
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]);
+  });
+
+  // --------------------------------------------------------------- save --
+  // Three ways to get the SVG out, tried in order:
+  //  1) claude.use('downloads') — only exists inside a published Claude artifact
+  //  2) a normal <a download> blob link — works on any regular website (e.g. Vercel)
+  //  3) a read-only textarea to copy from, as a last resort
+  function blobDownload(){
+    try{
+      var blob = new Blob([lastDataURL], { type: 'image/svg+xml' });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url; a.download = 'stipple.svg';
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setTimeout(function(){ URL.revokeObjectURL(url); }, 2000);
+      return true;
+    } catch(err){ return false; }
+  }
+  function showSvgFallback(){
+    if (blobDownload()) return;
+    var ta = document.createElement('textarea');
+    ta.value = lastDataURL;
+    ta.style.cssText = 'position:fixed;inset:8%;z-index:99;width:84%;height:84%;background:#080d18;color:#cfe4f7;border:1px solid #1a2637;padding:10px;font-family:monospace;font-size:11px;';
+    ta.readOnly = true;
+    document.body.appendChild(ta);
+    ta.focus(); ta.select();
+  }
+  document.getElementById('saveBtn').addEventListener('click', function(){
+    if (!lastDataURL) return;
+    if (typeof claude === 'undefined' || !claude.use){ showSvgFallback(); return; }
+    claude.use('downloads').then(function(downloads){
+      if (!downloads){ showSvgFallback(); return; }
+      return downloads.save({ filename: 'stipple.svg', data: lastDataURL });
+    }).catch(function(){ showSvgFallback(); });
+  });
+
+  // -------------------------------------------------------- tool modes --
+  var mode = 'view';
+  var toolButtons = Array.prototype.slice.call(document.querySelectorAll('.tool[data-mode]'));
+  toolButtons.forEach(function(btn){
+    btn.addEventListener('click', function(){
+      mode = btn.getAttribute('data-mode');
+      toolButtons.forEach(function(b){ b.setAttribute('aria-pressed', String(b === btn)); });
+      stageWrap.classList.remove('mode-erase','mode-add','mode-line');
+      if (mode !== 'view') stageWrap.classList.add('mode-'+mode);
+      hintText.style.display = mode === 'view' ? '' : 'none';
+      lineAnchor = null;
+    });
+  });
+
+  function svgPoint(evt){
+    var svg = outputStage.querySelector('svg');
+    if (!svg) return null;
+    var pt = svg.createSVGPoint();
+    pt.x = evt.clientX; pt.y = evt.clientY;
+    var ctm = svg.getScreenCTM();
+    if (!ctm) return null;
+    var loc = pt.matrixTransform(ctm.inverse());
+    return { x: loc.x, y: loc.y };
+  }
+
+  function nearestPoint(x, y, maxDist){
+    var best = null, bestD = maxDist*maxDist;
+    for (var i=0;i<currentPoints.length;i++){
+      var p = currentPoints[i];
+      var dx=p.x-x, dy=p.y-y, d2=dx*dx+dy*dy;
+      if (d2 < bestD){ bestD = d2; best = p; }
+    }
+    return best;
+  }
+
+  var dragging = false;
+  var lastAddPos = null;
+  var lineAnchor = null;
+
+  stageWrap.addEventListener('pointerdown', function(e){
+    if (mode === 'view') return;
+    var loc = svgPoint(e);
+    if (!loc) return;
+    dragging = true;
+    stageWrap.setPointerCapture(e.pointerId);
+
+    if (mode === 'erase'){
+      eraseRegions.push({ x:loc.x, y:loc.y, r: parseFloat(controls.eraserSize.value) });
+      scheduleRender();
+    } else if (mode === 'add'){
+      lastAddPos = loc;
+      manualPoints.push({ x:loc.x, y:loc.y, d:0.8, sizeRand: 0.3+Math.random()*1.5 });
+      scheduleRender();
+    } else if (mode === 'line'){
+      var snap = nearestPoint(loc.x, loc.y, 30);
+      lineAnchor = snap || loc;
+    }
+  });
+  stageWrap.addEventListener('pointermove', function(e){
+    if (!dragging) return;
+    var loc = svgPoint(e);
+    if (!loc) return;
+    if (mode === 'erase'){
+      eraseRegions.push({ x:loc.x, y:loc.y, r: parseFloat(controls.eraserSize.value) });
+      scheduleRender();
+    } else if (mode === 'add'){
+      if (!lastAddPos || Math.hypot(loc.x-lastAddPos.x, loc.y-lastAddPos.y) > parseFloat(controls.size.value)*1.6){
+        manualPoints.push({ x:loc.x, y:loc.y, d:0.8, sizeRand: 0.3+Math.random()*1.5 });
+        lastAddPos = loc;
+        scheduleRender();
+      }
+    }
+  });
+  ['pointerup','pointerleave','pointercancel'].forEach(function(ev){
+    stageWrap.addEventListener(ev, function(e){
+      if (mode === 'line' && lineAnchor && ev === 'pointerup'){
+        var loc = svgPoint(e);
+        if (loc){
+          var snap = nearestPoint(loc.x, loc.y, 30) || loc;
+          if (snap !== lineAnchor){
+            manualLines.push({ x1:lineAnchor.x, y1:lineAnchor.y, x2:snap.x, y2:snap.y });
+            render();
+          }
+        }
+        lineAnchor = null;
+      }
+      dragging = false; lastAddPos = null;
+    });
+  });
+
+  // ------------------------------------------------- default demo image --
+  // dark shape on a light background (matches the new "dark areas -> dots" default)
+  function drawDemo(){
+    srcW = 380; srcH = 380;
+    srcCanvas.width = srcW; srcCanvas.height = srcH;
+    srcCtx.fillStyle = '#ffffff';
+    srcCtx.fillRect(0,0,srcW,srcH);
+    var cx = srcW*0.5, cy = srcH*0.5, r = Math.min(srcW,srcH)*0.32;
+    srcCtx.fillStyle = '#000000';
+    srcCtx.beginPath(); srcCtx.arc(cx, cy, r, 0, Math.PI*2); srcCtx.fill();
+    srcCtx.fillStyle = '#ffffff';
+    srcCtx.beginPath(); srcCtx.arc(cx + r*0.55, cy - r*0.15, r*0.92, 0, Math.PI*2); srcCtx.fill();
+    refImg.src = srcCanvas.toDataURL();
+    regenerateAuto();
+  }
+  drawDemo();
+})();
+</script>
+
+</body>
+</html>
