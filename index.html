@@ -170,10 +170,23 @@
   .preset-btn{ font-size:10.5px; padding:5px 8px; }
   .preset-del:hover{ border-color:var(--text); color:var(--text); background:rgba(255,255,255,.06); }
   .preset-empty{ font-size:11.5px; color:var(--text-dim); padding:4px 0; }
-</style>
-</head>
-<body>
 
+  #manualColorFields{ display:flex; flex-direction:column; gap:12px; transition:opacity .15s; }
+
+  .compare-handle{
+    position:absolute; top:0; bottom:0; left:50%; width:2px;
+    background:var(--accent); display:none; cursor:ew-resize; z-index:2;
+  }
+  .compare-handle::after{
+    content:''; position:absolute; top:50%; left:50%; width:26px; height:26px;
+    margin:-13px 0 0 -13px; border-radius:50%; background:var(--accent);
+    box-shadow:0 0 0 1px var(--bg);
+  }
+  .stage-wrap.comparing .compare-handle{ display:block; }
+  .stage-wrap.comparing #refImg{ display:block !important; opacity:1; }
+  .preset-row{ display:flex; gap:6px; }
+  .preset-row .btn{ flex:1; }
+</style>
 
 <div class="page">
   <header>
@@ -189,11 +202,13 @@
         <button class="tool" data-mode="erase" aria-pressed="false">消しゴム</button>
         <button class="tool" data-mode="add" aria-pressed="false">追加</button>
         <button class="tool" data-mode="line" aria-pressed="false">線(星座)</button>
+        <button class="tool" id="compareToggle" aria-pressed="false">Before/After</button>
         <button class="tool ghost" id="clearManualBtn">手動編集をクリア</button>
       </div>
       <div class="stage-wrap" id="stageWrap">
         <img id="refImg" alt="">
         <div id="outputStage"></div>
+        <div class="compare-handle" id="compareHandle"></div>
         <div class="hint" id="hintText">画像をドラッグ&ドロップ、または右の「画像を選ぶ」</div>
       </div>
     </div>
@@ -272,21 +287,39 @@
         <input type="range" id="coreBlur" min="0" max="3.6" step="0.05" value="0">
       </div>
 
+      <div class="section-title">アニメーション</div>
+      <div class="field row">
+        <label><input type="checkbox" id="twinkle"> 点をゆらめかせる(キラキラ)</label>
+      </div>
+      <div class="field">
+        <label>ゆらめきの速さ(秒) <input type="number" class="val-input" id="valTwinkleSpeed" value="2.4"></label>
+        <input type="range" id="twinkleSpeed" min="0.8" max="6.0" step="0.1" value="2.4">
+      </div>
+      <div class="field">
+        <label>ゆらめきの深さ <input type="number" class="val-input" id="valTwinkleAmount" value="0.40"></label>
+        <input type="range" id="twinkleAmount" min="0" max="0.9" step="0.05" value="0.4">
+      </div>
+
       <div class="section-title">色</div>
       <div class="field row">
-        <label>コアの色</label>
-        <input type="color" id="coreColor" value="#ffffff">
+        <label><input type="checkbox" id="useSourceColor"> 元画像の色を点に反映</label>
       </div>
-      <div class="field row">
-        <label>発光(ハロー)の色</label>
-        <input type="color" id="haloColor" value="#7fe0ff">
-      </div>
-      <div class="field row">
-        <label><input type="checkbox" id="useGradient"> 点の中心から外側へグラデーション</label>
-      </div>
-      <div class="field row">
-        <label>グラデーション外側の色</label>
-        <input type="color" id="color2" value="#7fe0ff">
+      <div id="manualColorFields">
+        <div class="field row">
+          <label>コアの色</label>
+          <input type="color" id="coreColor" value="#ffffff">
+        </div>
+        <div class="field row">
+          <label>発光(ハロー)の色</label>
+          <input type="color" id="haloColor" value="#7fe0ff">
+        </div>
+        <div class="field row">
+          <label><input type="checkbox" id="useGradient"> 点の中心から外側へグラデーション</label>
+        </div>
+        <div class="field row">
+          <label>グラデーション外側の色</label>
+          <input type="color" id="color2" value="#7fe0ff">
+        </div>
       </div>
       <div class="field row">
         <label><input type="checkbox" id="showRef" checked> 元画像を薄く表示</label>
@@ -309,6 +342,17 @@
         <label>線のカーブ <input type="number" class="val-input" id="valLineCurve" value="0.20"></label>
         <input type="range" id="lineCurve" min="0" max="1" step="0.05" value="0.2">
       </div>
+      <div class="field row">
+        <label><input type="checkbox" id="autoConstellation"> 近い点を自動で線結び(星座)</label>
+      </div>
+      <div class="field">
+        <label>結ぶ最大距離 <input type="number" class="val-input" id="valConstellationDist" value="18"></label>
+        <input type="range" id="constellationDist" min="4" max="80" step="1" value="18">
+      </div>
+      <div class="field">
+        <label>1点あたりの最大本数 <input type="number" class="val-input" id="valConstellationMax" value="2"></label>
+        <input type="range" id="constellationMax" min="1" max="6" step="1" value="2">
+      </div>
 
       <div class="divider"></div>
 
@@ -317,6 +361,11 @@
         <input type="text" id="presetName" class="preset-name-input" placeholder="設定の名前(任意)">
       </div>
       <button class="btn primary" id="savePresetBtn">現在の設定を保存</button>
+      <div class="preset-row">
+        <button class="btn" id="exportPresetsBtn">書き出す</button>
+        <button class="btn" id="importPresetsBtn">読み込む</button>
+      </div>
+      <input type="file" id="presetImportInput" accept="application/json" style="display:none">
       <div id="presetList" class="preset-list"></div>
       <div class="status">保存した設定はこのブラウザに残ります</div>
 
@@ -367,15 +416,22 @@
     haloOpacity: document.getElementById('haloOpacity'),
     coreOpacity: document.getElementById('coreOpacity'),
     coreBlur: document.getElementById('coreBlur'),
+    twinkle: document.getElementById('twinkle'),
+    twinkleSpeed: document.getElementById('twinkleSpeed'),
+    twinkleAmount: document.getElementById('twinkleAmount'),
     coreColor: document.getElementById('coreColor'),
     haloColor: document.getElementById('haloColor'),
     useGradient: document.getElementById('useGradient'),
     color2: document.getElementById('color2'),
+    useSourceColor: document.getElementById('useSourceColor'),
     showRef: document.getElementById('showRef'),
     eraserSize: document.getElementById('eraserSize'),
     lineColor: document.getElementById('lineColor'),
     lineWidth: document.getElementById('lineWidth'),
-    lineCurve: document.getElementById('lineCurve')
+    lineCurve: document.getElementById('lineCurve'),
+    autoConstellation: document.getElementById('autoConstellation'),
+    constellationDist: document.getElementById('constellationDist'),
+    constellationMax: document.getElementById('constellationMax')
   };
   var valEls = {
     count: document.getElementById('valCount'),
@@ -389,11 +445,15 @@
     haloOpacity: document.getElementById('valHaloOpacity'),
     coreOpacity: document.getElementById('valCoreOpacity'),
     coreBlur: document.getElementById('valCoreBlur'),
+    twinkleSpeed: document.getElementById('valTwinkleSpeed'),
+    twinkleAmount: document.getElementById('valTwinkleAmount'),
     sparkSpikes: document.getElementById('valSparkSpikes'),
     sparkSharpness: document.getElementById('valSparkSharpness'),
     eraserSize: document.getElementById('valEraser'),
     lineWidth: document.getElementById('valLineWidth'),
-    lineCurve: document.getElementById('valLineCurve')
+    lineCurve: document.getElementById('valLineCurve'),
+    constellationDist: document.getElementById('valConstellationDist'),
+    constellationMax: document.getElementById('valConstellationMax')
   };
 
   // Digit precision for each slider's paired number field. Single source of
@@ -401,8 +461,10 @@
   var FMT_DIGITS = {
     count:0, size:2, blend:2, gamma:2, pack:2, variance:2,
     haloBlur:2, haloSpread:2, haloOpacity:2, coreOpacity:2, coreBlur:2,
+    twinkleSpeed:1, twinkleAmount:2,
     sparkSpikes:0, sparkSharpness:2,
-    eraserSize:0, lineWidth:1, lineCurve:2
+    eraserSize:0, lineWidth:1, lineCurve:2,
+    constellationDist:0, constellationMax:0
   };
 
   function fmt(id, digits){
@@ -538,6 +600,58 @@
     renderPresetList();
   });
 
+  // プリセットのファイル書き出し/読み込み。保存はブラウザのlocalStorageに
+  // 閉じているので、別の端末や人と共有するにはファイルに出す必要がある。
+  // SVG保存と同じ3段構え(claude.use('downloads') → <a download> → 何もしない)。
+  function saveTextFile(text, filename, mime){
+    if (typeof claude !== 'undefined' && claude.use){
+      claude.use('downloads').then(function(downloads){
+        if (!downloads){ blobSaveText(text, filename, mime); return; }
+        return downloads.save({ filename: filename, data: text });
+      }).catch(function(){ blobSaveText(text, filename, mime); });
+    } else {
+      blobSaveText(text, filename, mime);
+    }
+  }
+  function blobSaveText(text, filename, mime){
+    try{
+      var blob = new Blob([text], { type: mime || 'text/plain' });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url; a.download = filename;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setTimeout(function(){ URL.revokeObjectURL(url); }, 2000);
+    } catch(err){ /* nothing we can do here — ignore */ }
+  }
+  document.getElementById('exportPresetsBtn').addEventListener('click', function(){
+    saveTextFile(JSON.stringify(loadPresets(), null, 2), 'stipple-tracer-presets.json', 'application/json');
+  });
+  var presetImportInput = document.getElementById('presetImportInput');
+  document.getElementById('importPresetsBtn').addEventListener('click', function(){ presetImportInput.click(); });
+  presetImportInput.addEventListener('change', function(e){
+    var file = e.target.files && e.target.files[0];
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function(ev){
+      try{
+        var imported = JSON.parse(ev.target.result);
+        if (!Array.isArray(imported)) throw new Error('not a preset list');
+        var merged = loadPresets().concat(imported.map(function(p){
+          return {
+            id: Date.now() + '-' + Math.random().toString(36).slice(2),
+            name: (p && p.name) || '読み込んだ設定',
+            createdAt: Date.now(),
+            values: (p && p.values) || {}
+          };
+        }));
+        savePresetsList(merged);
+        renderPresetList();
+      } catch(err){ /* malformed file — silently ignore */ }
+      presetImportInput.value = '';
+    };
+    reader.readAsText(file);
+  });
+
   // ---------------------------------------------------------------- math --
   function sobelMagnitude(lum, w, h){
     var mag = new Float32Array(w*h);
@@ -606,6 +720,58 @@
     return false;
   }
 
+  // "星座線(自動)": connects each point to its nearest neighbors within
+  // maxDist, up to maxPerPoint edges per point, without connecting the same
+  // pair twice. Uses a grid of buckets sized to maxDist so it stays fast
+  // even at thousands of points (no O(n^2) all-pairs scan).
+  function buildConstellationLines(points, maxDist, maxPerPoint){
+    var n = points.length;
+    if (!n || maxDist <= 0 || maxPerPoint <= 0) return [];
+    var cell = Math.max(1, maxDist);
+    var buckets = Object.create(null);
+    var i, p, k;
+    for (i=0; i<n; i++){
+      p = points[i];
+      k = (Math.floor(p.x/cell)) + '_' + (Math.floor(p.y/cell));
+      (buckets[k] || (buckets[k] = [])).push(i);
+    }
+    var maxDist2 = maxDist*maxDist;
+    var connCount = new Array(n);
+    for (i=0;i<n;i++) connCount[i] = 0;
+    var seen = Object.create(null);
+    var out = [];
+    for (i=0; i<n; i++){
+      if (connCount[i] >= maxPerPoint) continue;
+      p = points[i];
+      var cx = Math.floor(p.x/cell), cy = Math.floor(p.y/cell);
+      var cands = [];
+      for (var gx=cx-1; gx<=cx+1; gx++){
+        for (var gy=cy-1; gy<=cy+1; gy++){
+          var bucket = buckets[gx+'_'+gy];
+          if (!bucket) continue;
+          for (var b=0;b<bucket.length;b++){
+            var j = bucket[b];
+            if (j===i) continue;
+            var q = points[j];
+            var dx=q.x-p.x, dy=q.y-p.y, d2=dx*dx+dy*dy;
+            if (d2<=maxDist2) cands.push([j,d2]);
+          }
+        }
+      }
+      cands.sort(function(a,b){ return a[1]-b[1]; });
+      for (var c=0; c<cands.length && connCount[i]<maxPerPoint; c++){
+        var jj = cands[c][0];
+        if (connCount[jj] >= maxPerPoint) continue;
+        var ek = i<jj ? (i+'_'+jj) : (jj+'_'+i);
+        if (seen[ek]) continue;
+        seen[ek] = true;
+        connCount[i]++; connCount[jj]++;
+        out.push({ x1:p.x, y1:p.y, x2:points[jj].x, y2:points[jj].y });
+      }
+    }
+    return out;
+  }
+
   // -------------------------------------------------------------- render --
   var cachedAutoPoints = [];
 
@@ -666,6 +832,27 @@
     var sparkSpikes = parseInt(controls.sparkSpikes.value, 10);
     var sparkSharpness = parseFloat(controls.sparkSharpness.value);
 
+    // "元画像の色を点に反映": sample the source photo's own pixel color at
+    // each dot's position instead of the picked core/halo colors. Read the
+    // full frame once per render (not per-dot) and index into it directly.
+    var useSourceColor = controls.useSourceColor.checked;
+    var srcPixels = useSourceColor ? srcCtx.getImageData(0,0,srcW,srcH).data : null;
+    function sampleColor(x,y){
+      var px = Math.min(srcW-1, Math.max(0, Math.round(x)));
+      var py = Math.min(srcH-1, Math.max(0, Math.round(y)));
+      var idx = (py*srcW+px)*4;
+      return '#' + ((1<<24) + (srcPixels[idx]<<16) + (srcPixels[idx+1]<<8) + srcPixels[idx+2]).toString(16).slice(1);
+    }
+
+    // "ゆらめかせる(キラキラ)": a shared CSS animation + a small palette of
+    // animation-delay classes (not one inline style per dot) so every point
+    // desyncs without inflating the file by much. Speed/depth are global
+    // (one <style> rule); only the per-dot delay bucket costs bytes.
+    var twinkle = controls.twinkle.checked;
+    var twinkleSpeed = parseFloat(controls.twinkleSpeed.value);
+    var twinkleAmount = parseFloat(controls.twinkleAmount.value);
+    var TWINKLE_BUCKETS = 16;
+
     // "光条(スパーク)" shape: a pointed star/burst polygon instead of a flat
     // circle, so the mark reads as a shard/ray of light rather than a soft
     // dot. rInner (the waist between spikes) is a fraction of rOuter (the
@@ -687,21 +874,32 @@
       var pt = allPoints[k];
       var sizeMul = 1 + (pt.sizeRand - 1) * variance;
       var rr = baseR * (0.7 + 0.6*pt.d) * sizeMul;
+      var extraAttrs = '';
+      if (useSourceColor) extraAttrs += ' fill="'+sampleColor(pt.x, pt.y)+'"';
+      if (twinkle) extraAttrs += ' class="twk a'+(k % TWINKLE_BUCKETS)+'"';
       if (dotShape === 'spark'){
         var rot = pt.rot || 0;
-        circlesHalo += '<polygon points="'+sparkPolygon(pt.x, pt.y, rr*haloSpread*1.6, rot)+'"/>';
-        circlesCore += '<polygon points="'+sparkPolygon(pt.x, pt.y, rr*1.6, rot)+'"/>';
+        circlesHalo += '<polygon points="'+sparkPolygon(pt.x, pt.y, rr*haloSpread*1.6, rot)+'"'+extraAttrs+'/>';
+        circlesCore += '<polygon points="'+sparkPolygon(pt.x, pt.y, rr*1.6, rot)+'"'+extraAttrs+'/>';
       } else {
-        circlesHalo += '<circle cx="'+pt.x.toFixed(1)+'" cy="'+pt.y.toFixed(1)+'" r="'+(rr*haloSpread).toFixed(2)+'"/>';
-        circlesCore += '<circle cx="'+pt.x.toFixed(1)+'" cy="'+pt.y.toFixed(1)+'" r="'+rr.toFixed(2)+'"/>';
+        circlesHalo += '<circle cx="'+pt.x.toFixed(1)+'" cy="'+pt.y.toFixed(1)+'" r="'+(rr*haloSpread).toFixed(2)+'"'+extraAttrs+'/>';
+        circlesCore += '<circle cx="'+pt.x.toFixed(1)+'" cy="'+pt.y.toFixed(1)+'" r="'+rr.toFixed(2)+'"'+extraAttrs+'/>';
       }
     }
 
+    // Manual lines (hand-drawn "線(星座)" tool) plus, when enabled, lines
+    // auto-connecting nearby points into a constellation-style network.
+    var allLines = manualLines.slice();
+    if (controls.autoConstellation.checked){
+      var cDist = parseFloat(controls.constellationDist.value);
+      var cMax = parseInt(controls.constellationMax.value, 10);
+      allLines = allLines.concat(buildConstellationLines(allPoints, cDist, cMax));
+    }
     var linesSvg = '';
     var lw = parseFloat(controls.lineWidth.value);
     var lc = controls.lineColor.value;
-    for (var li=0; li<manualLines.length; li++){
-      var ln = manualLines[li];
+    for (var li=0; li<allLines.length; li++){
+      var ln = allLines[li];
       var mx=(ln.x1+ln.x2)/2, my=(ln.y1+ln.y2)/2;
       var dx=ln.x2-ln.x1, dy=ln.y2-ln.y1;
       var dist = Math.sqrt(dx*dx+dy*dy) || 1;
@@ -725,8 +923,20 @@
       : '';
     var coreFill = useGradient ? 'url(#dotGrad)' : coreColor;
 
+    var twinkleStyle = '';
+    if (twinkle){
+      var delayStep = twinkleSpeed / TWINKLE_BUCKETS;
+      var delayRules = '';
+      for (var tb=0; tb<TWINKLE_BUCKETS; tb++){
+        delayRules += '.a'+tb+'{animation-delay:-'+(tb*delayStep).toFixed(2)+'s}';
+      }
+      twinkleStyle = '<style>@keyframes twk{0%,100%{opacity:1}50%{opacity:'+Math.max(0,1-twinkleAmount).toFixed(2)+'}}' +
+        '.twk{animation:twk '+twinkleSpeed.toFixed(1)+'s ease-in-out infinite}' + delayRules + '</style>';
+    }
+
     var svg =
       '<svg viewBox="0 0 '+srcW+' '+srcH+'" xmlns="http://www.w3.org/2000/svg">' +
+        twinkleStyle +
         '<defs>' +
           '<filter id="dotBlur" x="-100%" y="-100%" width="300%" height="300%">' +
             '<feGaussianBlur stdDeviation="'+(baseR*haloBlur || 0.001).toFixed(2)+'"/></filter>' +
@@ -774,6 +984,18 @@
   }
   controls.dotShape.addEventListener('change', updateSparkOptionsVisibility);
   updateSparkOptionsVisibility();
+
+  // "元画像の色を点に反映": when on, each dot's own color comes straight from
+  // the source photo (sampled per-point in render()), so the manual color
+  // pickers/gradient below no longer apply — dim them as a visual hint.
+  var manualColorFieldsEl = document.getElementById('manualColorFields');
+  function updateColorModeVisibility(){
+    var on = controls.useSourceColor.checked;
+    manualColorFieldsEl.style.opacity = on ? '.35' : '1';
+    manualColorFieldsEl.style.pointerEvents = on ? 'none' : '';
+  }
+  controls.useSourceColor.addEventListener('change', updateColorModeVisibility);
+  updateColorModeVisibility();
 
   document.getElementById('reshuffleBtn').addEventListener('click', regenerateAuto);
   document.getElementById('clearManualBtn').addEventListener('click', function(){
@@ -871,6 +1093,48 @@
       hintText.style.display = mode === 'view' ? '' : 'none';
       lineAnchor = null;
     });
+  });
+
+  // ------------------------------------------------------- before/after --
+  // A drag handle that clips the (now full-opacity) reference image on top
+  // of the traced SVG, so the left of the handle shows the original photo
+  // and the right shows the generated result underneath.
+  var compareToggleBtn = document.getElementById('compareToggle');
+  var compareHandle = document.getElementById('compareHandle');
+  var comparing = false;
+  var compareDragging = false;
+  function setReveal(pct){
+    pct = Math.max(0, Math.min(100, pct));
+    compareHandle.style.left = pct + '%';
+    refImg.style.clipPath = 'inset(0 ' + (100-pct).toFixed(2) + '% 0 0)';
+  }
+  compareToggleBtn.addEventListener('click', function(){
+    comparing = !comparing;
+    compareToggleBtn.setAttribute('aria-pressed', String(comparing));
+    stageWrap.classList.toggle('comparing', comparing);
+    if (comparing){
+      mode = 'view';
+      toolButtons.forEach(function(b){ b.setAttribute('aria-pressed', String(b.getAttribute('data-mode') === 'view')); });
+      stageWrap.classList.remove('mode-erase','mode-add','mode-line');
+      hintText.style.display = 'none';
+      setReveal(50);
+    } else {
+      refImg.style.clipPath = '';
+    }
+  });
+  compareHandle.addEventListener('pointerdown', function(e){
+    e.stopPropagation();
+    compareDragging = true;
+    compareHandle.setPointerCapture(e.pointerId);
+  });
+  compareHandle.addEventListener('pointermove', function(e){
+    if (!compareDragging) return;
+    e.stopPropagation();
+    var rect = stageWrap.getBoundingClientRect();
+    setReveal(((e.clientX - rect.left) / rect.width) * 100);
+  });
+  ['pointerup','pointercancel'].forEach(function(ev){
+    compareHandle.addEventListener(ev, function(e){ e.stopPropagation(); compareDragging = false; });
   });
 
   function svgPoint(evt){
