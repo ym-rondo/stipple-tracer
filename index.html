@@ -127,6 +127,28 @@
   .btn.primary:hover{ opacity:.9; color:var(--bg); }
   .status{ font-size:11px; color:var(--text-dim); font-family:"JetBrains Mono",monospace; }
   .divider{ height:1px; background:var(--line); margin:2px 0; }
+  input[type="text"].preset-name-input{
+    width:100%;
+    font-family:"Zen Kaku Gothic New","Hiragino Kaku Gothic ProN","Hiragino Sans",sans-serif;
+    font-size:12.5px;
+    color:var(--text);
+    background:rgba(255,255,255,.02);
+    border:1px solid var(--line);
+    border-radius:4px;
+    padding:8px 9px;
+  }
+  .preset-list{ display:flex; flex-direction:column; gap:6px; }
+  .preset-item{
+    display:flex; align-items:center; gap:6px;
+    padding:6px 8px;
+    border:1px solid var(--line);
+    border-radius:4px;
+    background:rgba(255,255,255,.02);
+  }
+  .preset-name{ flex:1; font-size:12px; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .preset-btn{ font-size:10.5px; padding:5px 8px; }
+  .preset-del:hover{ border-color:#ff6b6b; color:#ff6b6b; }
+  .preset-empty{ font-size:11.5px; color:var(--text-dim); padding:4px 0; }
 </style>
 </head>
 <body>
@@ -239,11 +261,20 @@
 
       <div class="divider"></div>
 
+      <div class="section-title">設定の保存・呼び出し</div>
+      <div class="field row split">
+        <input type="text" id="presetName" class="preset-name-input" placeholder="設定の名前(任意)">
+      </div>
+      <button class="btn primary" id="savePresetBtn">現在の設定を保存</button>
+      <div id="presetList" class="preset-list"></div>
+      <div class="status">保存した設定はこのブラウザに残ります</div>
+
+      <div class="divider"></div>
+
       <button class="btn" id="reshuffleBtn">再生成</button>
       <button class="btn" id="saveBtn">SVGを保存</button>
       <button class="btn" id="resetSettingsBtn">設定を初期値に戻す</button>
       <div class="status" id="status">点の数: —</div>
-      <div class="status" id="memoryNote">設定はこのブラウザに自動保存されます</div>
     </div>
   </main>
 </div>
@@ -312,10 +343,11 @@
   }
 
   // ------------------------------------------------------- settings memory --
-  // Remembers slider/color/checkbox settings in this browser (localStorage),
-  // so coming back later restores your last setup. Does NOT store the
-  // uploaded image or manual edits (erase/add/line) — only style settings.
-  var SETTINGS_KEY = 'stipple-tracer:settings:v1';
+  // Named presets: press "現在の設定を保存" to snapshot the current sliders/
+  // colors/checkboxes under a name, and recall any saved preset later via
+  // "呼び出す". Nothing is saved automatically. Does NOT store the uploaded
+  // image or manual edits (erase/add/line) — only style settings.
+  var PRESETS_KEY = 'stipple-tracer:presets:v1';
   var PERSIST_KEYS = Object.keys(controls);
 
   function getControlValue(key){
@@ -330,30 +362,88 @@
   var DEFAULTS = {};
   PERSIST_KEYS.forEach(function(key){ DEFAULTS[key] = getControlValue(key); });
 
-  function saveSettings(){
-    try{
-      var data = {};
-      PERSIST_KEYS.forEach(function(key){ data[key] = getControlValue(key); });
-      localStorage.setItem(SETTINGS_KEY, JSON.stringify(data));
-    } catch(err){ /* private mode / storage unavailable — ignore */ }
-  }
-  function loadSettings(){
-    try{
-      var raw = localStorage.getItem(SETTINGS_KEY);
-      if (!raw) return false;
-      var data = JSON.parse(raw);
-      PERSIST_KEYS.forEach(function(key){
-        if (Object.prototype.hasOwnProperty.call(data, key)) setControlValue(key, data[key]);
-      });
-      return true;
-    } catch(err){ return false; }
-  }
   function refreshAllLabels(){
     fmt('count',0); fmt('size',1); fmt('blend',2); fmt('gamma',2); fmt('pack',2); fmt('variance',2);
     fmt('haloBlur',2); fmt('haloSpread',2); fmt('haloOpacity',2); fmt('coreOpacity',2);
     fmt('eraserSize',0); fmt('lineWidth',1); fmt('lineCurve',2);
     refImg.style.display = controls.showRef.checked ? '' : 'none';
   }
+
+  function captureCurrentValues(){
+    var data = {};
+    PERSIST_KEYS.forEach(function(key){ data[key] = getControlValue(key); });
+    return data;
+  }
+  function applyValues(data){
+    PERSIST_KEYS.forEach(function(key){
+      if (Object.prototype.hasOwnProperty.call(data, key)) setControlValue(key, data[key]);
+    });
+    refreshAllLabels();
+    regenerateAuto();
+  }
+
+  function loadPresets(){
+    try{
+      var raw = localStorage.getItem(PRESETS_KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch(err){ return []; }
+  }
+  function savePresetsList(list){
+    try{ localStorage.setItem(PRESETS_KEY, JSON.stringify(list)); } catch(err){ /* storage unavailable — ignore */ }
+  }
+
+  var presetListEl = document.getElementById('presetList');
+  var presetNameInput = document.getElementById('presetName');
+
+  function renderPresetList(){
+    var presets = loadPresets();
+    presetListEl.innerHTML = '';
+    if (!presets.length){
+      var empty = document.createElement('div');
+      empty.className = 'preset-empty';
+      empty.textContent = 'まだ保存された設定はありません';
+      presetListEl.appendChild(empty);
+      return;
+    }
+    presets.forEach(function(p){
+      var row = document.createElement('div');
+      row.className = 'preset-item';
+      var nameSpan = document.createElement('span');
+      nameSpan.className = 'preset-name';
+      nameSpan.textContent = p.name;
+      var loadBtn = document.createElement('button');
+      loadBtn.type = 'button';
+      loadBtn.className = 'btn preset-btn';
+      loadBtn.textContent = '呼び出す';
+      loadBtn.addEventListener('click', function(){ applyValues(p.values); });
+      var delBtn = document.createElement('button');
+      delBtn.type = 'button';
+      delBtn.className = 'btn preset-btn preset-del';
+      delBtn.textContent = '削除';
+      delBtn.addEventListener('click', function(){
+        savePresetsList(loadPresets().filter(function(x){ return x.id !== p.id; }));
+        renderPresetList();
+      });
+      row.appendChild(nameSpan);
+      row.appendChild(loadBtn);
+      row.appendChild(delBtn);
+      presetListEl.appendChild(row);
+    });
+  }
+
+  document.getElementById('savePresetBtn').addEventListener('click', function(){
+    var name = presetNameInput.value.trim() || ('設定 ' + new Date().toLocaleString('ja-JP'));
+    var presets = loadPresets();
+    presets.push({
+      id: Date.now() + '-' + Math.random().toString(36).slice(2),
+      name: name,
+      createdAt: Date.now(),
+      values: captureCurrentValues()
+    });
+    savePresetsList(presets);
+    presetNameInput.value = '';
+    renderPresetList();
+  });
 
   // ---------------------------------------------------------------- math --
   function sobelMagnitude(lum, w, h){
@@ -548,7 +638,6 @@
       fmt('count',0); fmt('size',1); fmt('blend',2); fmt('gamma',2); fmt('pack',2); fmt('variance',2);
       fmt('haloBlur',2); fmt('haloSpread',2); fmt('haloOpacity',2); fmt('coreOpacity',2);
       fmt('eraserSize',0); fmt('lineWidth',1); fmt('lineCurve',2);
-      saveSettings();
       debounce(GENERATION_KEYS[key] ? regenerateAuto : render);
     });
   });
@@ -746,8 +835,8 @@
     refImg.src = srcCanvas.toDataURL();
     regenerateAuto();
   }
-  loadSettings();
   refreshAllLabels();
+  renderPresetList();
   drawDemo();
 })();
 </script>
