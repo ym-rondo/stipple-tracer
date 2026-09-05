@@ -241,7 +241,9 @@
 
       <button class="btn" id="reshuffleBtn">再生成</button>
       <button class="btn" id="saveBtn">SVGを保存</button>
+      <button class="btn" id="resetSettingsBtn">設定を初期値に戻す</button>
       <div class="status" id="status">点の数: —</div>
+      <div class="status" id="memoryNote">設定はこのブラウザに自動保存されます</div>
     </div>
   </main>
 </div>
@@ -307,6 +309,50 @@
   function fmt(id, digits){
     var el = valEls[id];
     if (el) el.textContent = parseFloat(controls[id].value).toFixed(digits);
+  }
+
+  // ------------------------------------------------------- settings memory --
+  // Remembers slider/color/checkbox settings in this browser (localStorage),
+  // so coming back later restores your last setup. Does NOT store the
+  // uploaded image or manual edits (erase/add/line) — only style settings.
+  var SETTINGS_KEY = 'stipple-tracer:settings:v1';
+  var PERSIST_KEYS = Object.keys(controls);
+
+  function getControlValue(key){
+    var el = controls[key];
+    return el.type === 'checkbox' ? el.checked : el.value;
+  }
+  function setControlValue(key, val){
+    var el = controls[key];
+    if (el.type === 'checkbox') el.checked = !!val;
+    else el.value = val;
+  }
+  var DEFAULTS = {};
+  PERSIST_KEYS.forEach(function(key){ DEFAULTS[key] = getControlValue(key); });
+
+  function saveSettings(){
+    try{
+      var data = {};
+      PERSIST_KEYS.forEach(function(key){ data[key] = getControlValue(key); });
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify(data));
+    } catch(err){ /* private mode / storage unavailable — ignore */ }
+  }
+  function loadSettings(){
+    try{
+      var raw = localStorage.getItem(SETTINGS_KEY);
+      if (!raw) return false;
+      var data = JSON.parse(raw);
+      PERSIST_KEYS.forEach(function(key){
+        if (Object.prototype.hasOwnProperty.call(data, key)) setControlValue(key, data[key]);
+      });
+      return true;
+    } catch(err){ return false; }
+  }
+  function refreshAllLabels(){
+    fmt('count',0); fmt('size',1); fmt('blend',2); fmt('gamma',2); fmt('pack',2); fmt('variance',2);
+    fmt('haloBlur',2); fmt('haloSpread',2); fmt('haloOpacity',2); fmt('coreOpacity',2);
+    fmt('eraserSize',0); fmt('lineWidth',1); fmt('lineCurve',2);
+    refImg.style.display = controls.showRef.checked ? '' : 'none';
   }
 
   // ---------------------------------------------------------------- math --
@@ -502,6 +548,7 @@
       fmt('count',0); fmt('size',1); fmt('blend',2); fmt('gamma',2); fmt('pack',2); fmt('variance',2);
       fmt('haloBlur',2); fmt('haloSpread',2); fmt('haloOpacity',2); fmt('coreOpacity',2);
       fmt('eraserSize',0); fmt('lineWidth',1); fmt('lineCurve',2);
+      saveSettings();
       debounce(GENERATION_KEYS[key] ? regenerateAuto : render);
     });
   });
@@ -513,6 +560,12 @@
   document.getElementById('clearManualBtn').addEventListener('click', function(){
     eraseRegions = []; manualPoints = []; manualLines = [];
     render();
+  });
+  document.getElementById('resetSettingsBtn').addEventListener('click', function(){
+    PERSIST_KEYS.forEach(function(key){ setControlValue(key, DEFAULTS[key]); });
+    refreshAllLabels();
+    try{ localStorage.removeItem(SETTINGS_KEY); } catch(err){}
+    regenerateAuto();
   });
 
   // ------------------------------------------------------------- loading --
@@ -693,6 +746,8 @@
     refImg.src = srcCanvas.toDataURL();
     regenerateAuto();
   }
+  loadSettings();
+  refreshAllLabels();
   drawDemo();
 })();
 </script>
