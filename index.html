@@ -102,7 +102,18 @@
   }
   .field{ display:flex; flex-direction:column; gap:5px; }
   .field label{ font-size:11.5px; color:var(--text-dim); display:flex; justify-content:space-between; }
-  .field label .val{ font-family:"JetBrains Mono",monospace; color:var(--text); }
+  .field label .val-input{
+    font-family:"JetBrains Mono",monospace;
+    font-size:11.5px;
+    color:var(--text);
+    background:rgba(255,255,255,.04);
+    border:1px solid var(--line);
+    border-radius:3px;
+    width:64px;
+    padding:2px 4px;
+    text-align:right;
+  }
+  .field label .val-input:focus{ outline:none; border-color:var(--accent); }
   .field input[type="range"]{ width:100%; accent-color:var(--accent); }
   .field.row{ flex-direction:row; align-items:center; justify-content:space-between; }
   .field.row label{ display:flex; align-items:center; gap:8px; font-size:12px; }
@@ -193,27 +204,27 @@
 
       <div class="section-title">生成</div>
       <div class="field">
-        <label>点の数 <span class="val" id="valCount">1800</span></label>
-        <input type="range" id="count" min="50" max="9600" step="50" value="1800">
+        <label>点の数 <input type="number" class="val-input" id="valCount" value="1800"></label>
+        <input type="range" id="count" min="50" max="14400" step="50" value="1800">
       </div>
       <div class="field">
-        <label>点の大きさ <span class="val" id="valSize">1.4</span></label>
-        <input type="range" id="size" min="0.3" max="7.2" step="0.1" value="1.4">
+        <label>点の大きさ <input type="number" class="val-input" id="valSize" value="1.4"></label>
+        <input type="range" id="size" min="0.05" max="7.2" step="0.05" value="1.4">
       </div>
       <div class="field">
-        <label>濃淡 ⇄ 輪郭 <span class="val" id="valBlend">0.50</span></label>
+        <label>濃淡 ⇄ 輪郭 <input type="number" class="val-input" id="valBlend" value="0.50"></label>
         <input type="range" id="blend" min="0" max="1" step="0.05" value="0.5">
       </div>
       <div class="field">
-        <label>コントラスト <span class="val" id="valGamma">1.10</span></label>
+        <label>コントラスト <input type="number" class="val-input" id="valGamma" value="1.10"></label>
         <input type="range" id="gamma" min="0.2" max="4.8" step="0.05" value="1.1">
       </div>
       <div class="field">
-        <label>密集幅(詰まり具合) <span class="val" id="valPack">1.70</span></label>
+        <label>密集幅(詰まり具合) <input type="number" class="val-input" id="valPack" value="1.70"></label>
         <input type="range" id="pack" min="0.7" max="6.0" step="0.05" value="1.7">
       </div>
       <div class="field">
-        <label>サイズのばらつき(均等⇄ランダム) <span class="val" id="valVariance">0.30</span></label>
+        <label>サイズのばらつき(均等⇄ランダム) <input type="number" class="val-input" id="valVariance" value="0.30"></label>
         <input type="range" id="variance" min="0" max="1" step="0.05" value="0.3">
       </div>
       <div class="field row">
@@ -230,34 +241,34 @@
       </div>
       <div id="sparkOptions">
         <div class="field">
-          <label>スパークの本数 <span class="val" id="valSparkSpikes">4</span></label>
+          <label>スパークの本数 <input type="number" class="val-input" id="valSparkSpikes" value="4"></label>
           <input type="range" id="sparkSpikes" min="3" max="10" step="1" value="4">
         </div>
         <div class="field">
-          <label>スパークの鋭さ <span class="val" id="valSparkSharpness">0.18</span></label>
+          <label>スパークの鋭さ <input type="number" class="val-input" id="valSparkSharpness" value="0.18"></label>
           <input type="range" id="sparkSharpness" min="0.05" max="0.72" step="0.01" value="0.18">
         </div>
       </div>
 
       <div class="section-title">発光</div>
       <div class="field">
-        <label>にじみの強さ <span class="val" id="valHaloBlur">1.10</span></label>
+        <label>にじみの強さ <input type="number" class="val-input" id="valHaloBlur" value="1.10"></label>
         <input type="range" id="haloBlur" min="0" max="3.6" step="0.05" value="1.1">
       </div>
       <div class="field">
-        <label>光の広がり <span class="val" id="valHaloSpread">1.90</span></label>
+        <label>光の広がり <input type="number" class="val-input" id="valHaloSpread" value="1.90"></label>
         <input type="range" id="haloSpread" min="1.0" max="4.8" step="0.1" value="1.9">
       </div>
       <div class="field">
-        <label>ハローの不透明度 <span class="val" id="valHaloOpacity">0.50</span></label>
+        <label>ハローの不透明度 <input type="number" class="val-input" id="valHaloOpacity" value="0.50"></label>
         <input type="range" id="haloOpacity" min="0" max="1" step="0.05" value="0.5">
       </div>
       <div class="field">
-        <label>コアの不透明度 <span class="val" id="valCoreOpacity">0.95</span></label>
+        <label>コアの不透明度 <input type="number" class="val-input" id="valCoreOpacity" value="0.95"></label>
         <input type="range" id="coreOpacity" min="0" max="1" step="0.05" value="0.95">
       </div>
       <div class="field">
-        <label>コアの輪郭のぼかし <span class="val" id="valCoreBlur">0.00</span></label>
+        <label>コアの輪郭のぼかし <input type="number" class="val-input" id="valCoreBlur" value="0.00"></label>
         <input type="range" id="coreBlur" min="0" max="3.6" step="0.05" value="0">
       </div>
 
@@ -283,7 +294,7 @@
 
       <div class="section-title">編集ツール</div>
       <div class="field">
-        <label>消しゴムの大きさ <span class="val" id="valEraser">16</span></label>
+        <label>消しゴムの大きさ <input type="number" class="val-input" id="valEraser" value="16"></label>
         <input type="range" id="eraserSize" min="4" max="72" step="1" value="16">
       </div>
       <div class="field row split">
@@ -291,11 +302,11 @@
         <input type="color" id="lineColor" value="#eaf9ff">
       </div>
       <div class="field">
-        <label>線の太さ <span class="val" id="valLineWidth">1.2</span></label>
+        <label>線の太さ <input type="number" class="val-input" id="valLineWidth" value="1.2"></label>
         <input type="range" id="lineWidth" min="0.3" max="4.8" step="0.1" value="1.2">
       </div>
       <div class="field">
-        <label>線のカーブ <span class="val" id="valLineCurve">0.20</span></label>
+        <label>線のカーブ <input type="number" class="val-input" id="valLineCurve" value="0.20"></label>
         <input type="range" id="lineCurve" min="0" max="1" step="0.05" value="0.2">
       </div>
 
@@ -385,10 +396,46 @@
     lineCurve: document.getElementById('valLineCurve')
   };
 
+  // Digit precision for each slider's paired number field. Single source of
+  // truth for formatting — also drives fmtAll() below.
+  var FMT_DIGITS = {
+    count:0, size:2, blend:2, gamma:2, pack:2, variance:2,
+    haloBlur:2, haloSpread:2, haloOpacity:2, coreOpacity:2, coreBlur:2,
+    sparkSpikes:0, sparkSharpness:2,
+    eraserSize:0, lineWidth:1, lineCurve:2
+  };
+
   function fmt(id, digits){
     var el = valEls[id];
-    if (el) el.textContent = parseFloat(controls[id].value).toFixed(digits);
+    // Skip the field the user is actively typing into — overwriting it
+    // mid-edit would fight their keystrokes (see numEl 'input' handler below).
+    if (el && el !== document.activeElement) el.value = parseFloat(controls[id].value).toFixed(digits);
   }
+  function fmtAll(){
+    Object.keys(FMT_DIGITS).forEach(function(key){ fmt(key, FMT_DIGITS[key]); });
+  }
+
+  // Manual numeric entry: every slider's value display is now an
+  // <input type="number"> instead of a read-only span. min/max/step are
+  // copied from the paired range input (the range stays the single source
+  // of truth for the slider's limits), and edits sync back to the range.
+  Object.keys(valEls).forEach(function(key){
+    var numEl = valEls[key];
+    var rangeEl = controls[key];
+    if (!numEl || !rangeEl || rangeEl.type !== 'range') return;
+    numEl.min = rangeEl.min;
+    numEl.max = rangeEl.max;
+    numEl.step = rangeEl.step;
+    numEl.addEventListener('input', function(){
+      var raw = parseFloat(numEl.value);
+      if (isNaN(raw)) return; // let them keep typing (e.g. a lone "-" or empty field)
+      var min = parseFloat(rangeEl.min), max = parseFloat(rangeEl.max);
+      rangeEl.value = Math.min(max, Math.max(min, raw));
+      rangeEl.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    numEl.addEventListener('keydown', function(e){ if (e.key === 'Enter') numEl.blur(); });
+    numEl.addEventListener('change', function(){ fmt(key, FMT_DIGITS[key]); });
+  });
 
   // ------------------------------------------------------- settings memory --
   // Named presets: press "現在の設定を保存" to snapshot the current sliders/
@@ -411,9 +458,7 @@
   PERSIST_KEYS.forEach(function(key){ DEFAULTS[key] = getControlValue(key); });
 
   function refreshAllLabels(){
-    fmt('count',0); fmt('size',1); fmt('blend',2); fmt('gamma',2); fmt('pack',2); fmt('variance',2);
-    fmt('haloBlur',2); fmt('haloSpread',2); fmt('haloOpacity',2); fmt('coreOpacity',2); fmt('coreBlur',2); fmt('sparkSpikes',0); fmt('sparkSharpness',2);
-    fmt('eraserSize',0); fmt('lineWidth',1); fmt('lineCurve',2);
+    fmtAll();
     refImg.style.display = controls.showRef.checked ? '' : 'none';
   }
 
@@ -715,9 +760,7 @@
 
   Object.keys(controls).forEach(function(key){
     controls[key].addEventListener('input', function(){
-      fmt('count',0); fmt('size',1); fmt('blend',2); fmt('gamma',2); fmt('pack',2); fmt('variance',2);
-      fmt('haloBlur',2); fmt('haloSpread',2); fmt('haloOpacity',2); fmt('coreOpacity',2); fmt('coreBlur',2); fmt('sparkSpikes',0); fmt('sparkSharpness',2);
-      fmt('eraserSize',0); fmt('lineWidth',1); fmt('lineCurve',2);
+      fmtAll();
       debounce(GENERATION_KEYS[key] ? regenerateAuto : render);
     });
   });
