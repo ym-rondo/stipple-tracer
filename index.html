@@ -286,6 +286,9 @@
         <label>コアの輪郭のぼかし <input type="number" class="val-input" id="valCoreBlur" value="0.00"></label>
         <input type="range" id="coreBlur" min="0" max="3.6" step="0.05" value="0">
       </div>
+      <div class="field row">
+        <label><input type="checkbox" id="additive"> 重なりを明るくする(加算合成)</label>
+      </div>
 
       <div class="section-title">アニメーション</div>
       <div class="field row">
@@ -356,6 +359,21 @@
 
       <div class="divider"></div>
 
+      <!-- RONDO（時の座標）の3D空間で使っている光と同じ見え方にするための一発設定。
+           あちらは three.js の AdditiveBlending で、白い小さな芯＋色のついた広い暈、
+           という組み立てになっている。押すだけでその配合に揃う。 -->
+      <div class="section-title">RONDOの光</div>
+      <div class="status" style="margin-bottom:8px">押すとRONDOの3D空間と同じ光り方になります（色だけ選べます）</div>
+      <div class="preset-row" style="flex-wrap:wrap;gap:6px">
+        <button class="btn" data-rondo="#7fb4ff">青 未来実装</button>
+        <button class="btn" data-rondo="#f08a72">赤 過去処理</button>
+        <button class="btn" data-rondo="#ffd479">金 現在地</button>
+        <button class="btn" data-rondo="#f0ead8">生成り 意識</button>
+        <button class="btn" data-rondo="#aebedd">青灰 現実</button>
+      </div>
+
+      <div class="divider"></div>
+
       <div class="section-title">設定の保存・呼び出し</div>
       <div class="field row split">
         <input type="text" id="presetName" class="preset-name-input" placeholder="設定の名前(任意)">
@@ -416,6 +434,7 @@
     haloOpacity: document.getElementById('haloOpacity'),
     coreOpacity: document.getElementById('coreOpacity'),
     coreBlur: document.getElementById('coreBlur'),
+    additive: document.getElementById('additive'),
     twinkle: document.getElementById('twinkle'),
     twinkleSpeed: document.getElementById('twinkleSpeed'),
     twinkleAmount: document.getElementById('twinkleAmount'),
@@ -536,6 +555,35 @@
     refreshAllLabels();
     regenerateAuto();
   }
+
+  // RONDO（時の座標）の3D空間で使っている光の配合。
+  // 向こうは three.js で、点ひとつを次のように組んでいる:
+  //   暈  = 色つきのスプライト、不透明度 = 基準値 × 0.55、加算合成
+  //   芯  = 純白のスプライト、暈の 32% の大きさ、不透明度 = min(1, 基準値+0.2)、加算合成
+  // ここでは haloSpread が「暈と芯の半径比」にあたるので、1 ÷ 0.32 ≒ 3.1 で揃う。
+  // 芯が白く小さいことが肝で、これを外すと「光」ではなく「塊」に見える。
+  var RONDO_LIGHT = {
+    haloSpread: '3.1',
+    haloBlur: '1.7',
+    haloOpacity: '0.55',
+    coreOpacity: '1',
+    coreBlur: '0',
+    coreColor: '#ffffff',
+    useGradient: false,
+    useSourceColor: false,
+    additive: true,
+    twinkle: false,
+    dotShape: 'circle'
+  };
+  document.querySelectorAll('[data-rondo]').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var data = {};
+      Object.keys(RONDO_LIGHT).forEach(function(k){ data[k] = RONDO_LIGHT[k]; });
+      data.haloColor = btn.getAttribute('data-rondo'); // 暈の色だけボタンごとに変える
+      data.color2 = data.haloColor;
+      applyValues(data);
+    });
+  });
 
   function loadPresets(){
     try{
@@ -923,6 +971,11 @@
       : '';
     var coreFill = useGradient ? 'url(#dotGrad)' : coreColor;
 
+    // 加算合成。plus-lighter は色をそのまま足し合わせるので、three.js の
+    // AdditiveBlending と同じ見え方になる。対応していない環境では screen に落ちる。
+    var additive = controls.additive.checked;
+    var blendAttr = additive ? ' style="mix-blend-mode:screen;mix-blend-mode:plus-lighter"' : '';
+
     var twinkleStyle = '';
     if (twinkle){
       var delayStep = twinkleSpeed / TWINKLE_BUCKETS;
@@ -945,8 +998,12 @@
           gradDef +
         '</defs>' +
         '<g stroke="none">'+linesSvg+'</g>' +
-        '<g fill="'+haloColor+'" opacity="'+haloOpacity+'" filter="url(#dotBlur)">'+circlesHalo+'</g>' +
-        '<g fill="'+coreFill+'" opacity="'+coreOpacity+'" filter="url(#coreBlurFilter)">'+circlesCore+'</g>' +
+        // 加算合成：重なった点ほど明るくなる。three.js の AdditiveBlending と同じ見え方で、
+        // 「光が重なっている」感じが出る。isolation:isolate で、背景まで巻き込まないようにする。
+        (additive ? '<g style="isolation:isolate">' : '') +
+        '<g fill="'+haloColor+'" opacity="'+haloOpacity+'" filter="url(#dotBlur)"'+blendAttr+'>'+circlesHalo+'</g>' +
+        '<g fill="'+coreFill+'" opacity="'+coreOpacity+'" filter="url(#coreBlurFilter)"'+blendAttr+'>'+circlesCore+'</g>' +
+        (additive ? '</g>' : '') +
       '</svg>';
 
     outputStage.innerHTML = svg;
