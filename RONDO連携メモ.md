@@ -99,6 +99,61 @@ RONDO 側には受け皿がすでにある:
 - 割り当ての単位は「札のID」ではなく **「種類（kind）＋バリアント（variant）」**。
   日付によって区分が12個か13個に変わるため、IDに紐づけると崩れるから
 
+## RONDO の layout.json の書式
+
+RONDO へ受け渡すスニペットを自動生成するなら、**この書式に合わせないと読めない**。
+
+`src/layout.json` の `types` に、キーと設定を1つ足す形。
+
+```json
+"yearSegment/dk1": {
+  "render": "svg",
+  "svg": "<svg viewBox=\"0 0 280 420\" ...>...</svg>",
+  "layer": "segments",
+  "offset": [0, 0],
+  "scale": 1,
+  "rotation": 0,
+  "anchor": "center",
+  "fallbackToText": true
+}
+```
+
+- `render` … `"text"`（既定）/ `"svg"` / `"image"` / `"hidden"`
+- `svg` … インラインSVG文字列。`render:"svg"` のときに使う
+- `image` … `public/` からのパス。`render:"image"` のときに使う
+- `offset` … 投影位置からのズレ（px）
+- `rotation` … 度
+- `anchor` … `center` / `top` / `bottom` / `left` / `right`
+- `fallbackToText` … 絵が未設定なら文字を出す（既定 true）
+
+**キーの作り方**は `種類` または `種類/バリアント`。
+`種類` だけ書くとその種類ぜんぶの共通設定になり、`種類/バリアント` がそれを上書きする。
+つまり **グループ共通の設定を1行で書ける**。
+
+### 種類とバリアントの一覧
+
+| 種類 | バリアント |
+|---|---|
+| `consciousWorld` | なし |
+| `realWorld` | なし |
+| `zone` | `koji` / `seishin` / `kitei` |
+| `yearSegment` | `dk1` `dk2` `ds1` `ds2` `dt1` `dt2` `jt1` `jt2` `js1` `js2` `jk1` `jk2` / `hensei` |
+| `segmentDate` | 同上（区分の新月日付） |
+| `segmentLunar` | 同上（区分の旧暦） |
+| `solstice` | `summer` / `autumn` / `winter` / `spring` |
+| `cycleNumber` | `"1"` 〜 `"19"` |
+| `moonNew` | なし |
+| `moonPhase` | `firstQuarter` / `full` / `lastQuarter` |
+| `lunarDay` | `"1"` 〜 `"31"` |
+| `lunarAction` | `"0"` 〜 `"29"` |
+
+区分キーの読み方: `d`=下降 / `j`=上昇、`k`=高次 / `s`=精神 / `t`=基底、末尾の数字が①②。
+つまり `dk1` = 下降高次①、`jt2` = 上昇基底②。
+
+### レイヤーID
+
+`world` / `zones` / `lunarDates` / `dates` / `solstice` / `segments` / `cycles` / `lunar`
+
 ## 受け渡しの流れ
 
     このアプリで作る → 「SVGを保存」 → RONDO の ?edit=1 で該当の種類に貼る
