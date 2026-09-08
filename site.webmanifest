@@ -1,0 +1,26 @@
+{
+  "name": "点描トレーサー",
+  "short_name": "点描トレーサー",
+  "description": "画像や下絵から「光の点描画」のSVGを作る道具",
+  "start_url": "./",
+  "display": "browser",
+  "background_color": "#03050b",
+  "theme_color": "#03050b",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "icon-512.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    },
+    {
+      "src": "icon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any"
+    }
+  ]
+}
