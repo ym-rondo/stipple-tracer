@@ -44,6 +44,19 @@
 
   .stage-col{ display:flex; flex-direction:column; gap:8px; }
 
+  /* 横並びのときは、パネルをどれだけ下までスクロールしても編集画面が見えているようにする。
+     貼り付けるだけだと、正方形のステージが画面より背が高い場合に結局はみ出して
+     見えなくなるので、画面の高さに収まるところまで縮める（ツールバーと上下の余白ぶんを引く）。
+     縦積みになる幅では、貼り付けるとパネルの上に居座ってしまうので効かせない。 */
+  @media (min-width:821px){
+    .stage-col{ position:sticky; top:14px; align-self:start; }
+    .stage-wrap{
+      max-width:calc(100vh - 88px);
+      max-height:calc(100vh - 88px);
+      margin:0 auto;
+    }
+  }
+
   .toolbar{ display:flex; gap:6px; flex-wrap:wrap; }
   .tool{
     font-family:"JetBrains Mono",monospace;
