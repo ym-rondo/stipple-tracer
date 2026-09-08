@@ -74,13 +74,26 @@
     touch-action:none;
   }
   .stage-wrap.dragover{ border-color:var(--accent); }
-  .stage-wrap.mode-erase, .stage-wrap.mode-add, .stage-wrap.mode-line{ cursor:crosshair; }
+  .stage-wrap.mode-erase, .stage-wrap.mode-add, .stage-wrap.mode-line,
+  .stage-wrap.mode-sketch{ cursor:crosshair; }
+
+  /* 下絵・点描・Before/After を「同じ枠」に重ねるための内枠。
+     これが無いと参照画像は枠いっぱい、SVGはその92%の内側に描かれるため、
+     下絵をなぞっているつもりが数%ずれる（Before/After比較も同じ理由でずれていた）。 */
+  .stage-inner{ position:absolute; left:4%; top:4%; width:92%; height:92%; }
   #refImg{
     position:absolute; inset:0; width:100%; height:100%;
     object-fit:contain; opacity:.14; pointer-events:none;
   }
-  #outputStage{ position:relative; width:92%; height:92%; }
+  #outputStage{ position:absolute; inset:0; }
   #outputStage svg{ width:100%; height:100%; display:block; }
+  /* 描いている最中だけ出る下絵のプレビュー層。白い紙をそのまま重ねると
+     点描が見えなくなるので、背景は透明にして線だけを色で描く。 */
+  #sketchView{
+    position:absolute; inset:0; width:100%; height:100%;
+    object-fit:contain; pointer-events:none; display:none; opacity:.5;
+  }
+  .stage-wrap.mode-sketch #sketchView{ display:block; }
 
   .hint{
     position:absolute; top:10px; left:12px; right:12px;
@@ -122,7 +135,7 @@
     width:36px; height:24px; border:1px solid var(--line); border-radius:3px;
     background:none; padding:0; cursor:pointer;
   }
-  select#dotShape{
+  select#dotShape, select.sel{
     font-family:"Zen Kaku Gothic New","Hiragino Kaku Gothic ProN","Hiragino Sans",sans-serif;
     font-size:12.5px;
     color:var(--text);
@@ -132,6 +145,7 @@
     padding:6px 8px;
     cursor:pointer;
   }
+  select.sel{ width:100%; }
   .btn{
     font-family:"JetBrains Mono",monospace;
     font-size:11.5px;
@@ -186,6 +200,20 @@
   .stage-wrap.comparing #refImg{ display:block !important; opacity:1; }
   .preset-row{ display:flex; gap:6px; }
   .preset-row .btn{ flex:1; }
+
+  .slot-list{ display:flex; flex-direction:column; gap:4px; max-height:300px; overflow-y:auto; }
+  .slot-item{
+    display:flex; align-items:center; gap:6px;
+    padding:5px 7px; border:1px solid var(--line); border-radius:4px;
+    background:rgba(255,255,255,.02);
+  }
+  .slot-item.filled{ border-color:#55555e; }
+  .slot-dot{ width:7px; height:7px; border-radius:50%; background:#33333a; flex:0 0 auto; }
+  .slot-item.filled .slot-dot{ background:var(--accent); }
+  .slot-name{ flex:1; font-size:11.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .slot-item.current .slot-name{ color:var(--accent); font-weight:500; }
+  .slot-btn{ font-size:10px; padding:4px 6px; }
+  code{ font-family:"JetBrains Mono",monospace; font-size:10.5px; color:var(--text); }
 </style>
 
 <div class="page">
@@ -199,6 +227,7 @@
     <div class="stage-col">
       <div class="toolbar">
         <button class="tool" data-mode="view" aria-pressed="true">選択</button>
+        <button class="tool" data-mode="sketch" aria-pressed="false">下絵を描く</button>
         <button class="tool" data-mode="erase" aria-pressed="false">消しゴム</button>
         <button class="tool" data-mode="add" aria-pressed="false">追加</button>
         <button class="tool" data-mode="line" aria-pressed="false">線(星座)</button>
@@ -206,16 +235,47 @@
         <button class="tool ghost" id="clearManualBtn">手動編集をクリア</button>
       </div>
       <div class="stage-wrap" id="stageWrap">
-        <img id="refImg" alt="">
-        <div id="outputStage"></div>
-        <div class="compare-handle" id="compareHandle"></div>
-        <div class="hint" id="hintText">画像をドラッグ&ドロップ、または右の「画像を選ぶ」</div>
+        <div class="stage-inner" id="stageInner">
+          <img id="refImg" alt="">
+          <canvas id="sketchView"></canvas>
+          <div id="outputStage"></div>
+          <div class="compare-handle" id="compareHandle"></div>
+        </div>
+        <div class="hint" id="hintText">画像をドラッグ&ドロップ、または右の「画像を選ぶ」。写真が無くても「白紙にする」から描き起こせます</div>
       </div>
     </div>
 
     <div class="panel">
       <button class="btn primary" id="pickBtn">画像を選ぶ</button>
       <input type="file" id="fileInput" accept="image/*" style="display:none">
+
+      <!-- 下絵：写真が無くても点描を作れるようにするための描画面。
+           描いた線はベクタのまま持っていて、点描の元になる画像（srcCanvas）は
+           「土台（写真 or 白紙）＋ 線」を毎回焼き直して作る。
+           ベクタで持つのは、一つ戻すが pop() だけで済むから。 -->
+      <div class="section-title">下絵</div>
+      <div class="status" style="margin-bottom:2px">
+        白紙に描いた線を、そのまま点描にできます。写真の上に描き足すこともできます。
+      </div>
+      <div class="preset-row">
+        <button class="btn" id="blankBtn">白紙にする</button>
+        <button class="btn" id="sketchUndoBtn">一つ戻す</button>
+      </div>
+      <div id="sketchTools" style="display:none;flex-direction:column;gap:10px">
+        <div class="preset-row" style="flex-wrap:wrap">
+          <button class="tool" data-shape="free" aria-pressed="true">筆</button>
+          <button class="tool" data-shape="line" aria-pressed="false">直線</button>
+          <button class="tool" data-shape="circle" aria-pressed="false">円</button>
+          <button class="tool" data-shape="rect" aria-pressed="false">四角</button>
+          <button class="tool" data-shape="erase" aria-pressed="false">消す</button>
+        </div>
+        <div class="field">
+          <label>線の太さ <input type="number" class="val-input" id="valSketchWidth" value="10"></label>
+          <input type="range" id="sketchWidth" min="1" max="80" step="1" value="10">
+        </div>
+        <div class="field row"><label><input type="checkbox" id="sketchFill"> 円・四角を塗りつぶす</label></div>
+        <button class="btn" id="sketchClearBtn">下絵の線を全部消す</button>
+      </div>
 
       <div class="section-title">生成</div>
       <div class="field">
@@ -368,13 +428,67 @@
         暈の広がり・にじみ・不透明度・芯の色・加算合成まで一括で切り替わり、選ぶのは色だけ。<br>
         点の数・大きさ・コントラストなど<b>絵の作り方の設定はそのまま</b>なので、あとから自由に調整できます。
       </div>
+      <div class="status" style="margin:2px 0 4px">点と環の色</div>
       <div class="preset-row" style="flex-wrap:wrap;gap:6px">
         <button class="btn" data-rondo="#7fb4ff">青 未来実装</button>
         <button class="btn" data-rondo="#f08a72">赤 過去処理</button>
         <button class="btn" data-rondo="#ffd479">金 現在地</button>
         <button class="btn" data-rondo="#f0ead8">生成り 意識</button>
         <button class="btn" data-rondo="#aebedd">青灰 現実</button>
+        <button class="btn" data-rondo="#d9bb7c">金茶 19年軌道</button>
+        <button class="btn" data-rondo="#cfd6e8">淡青 月</button>
       </div>
+      <!-- 同じグループの絵は同じ色で作ると馴染む。区分は下降期／上昇期／編成月、
+           19年周期は第一〜第三期でRONDO側の色が決まっている。 -->
+      <div class="status" style="margin:8px 0 4px">グループの色（連作を揃えるとき）</div>
+      <div class="preset-row" style="flex-wrap:wrap;gap:6px">
+        <button class="btn" data-rondo="#d8cdb8">下降期</button>
+        <button class="btn" data-rondo="#b9c8e6">上昇期</button>
+        <button class="btn" data-rondo="#c9a0d9">編成月</button>
+        <button class="btn" data-rondo="#6f9ce8">周期 第一期</button>
+        <button class="btn" data-rondo="#e8776f">周期 第二期</button>
+        <button class="btn" data-rondo="#e8c96f">周期 第三期</button>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- RONDO の ?edit=1 は「表示のしかた＝SVG」を選ぶと SVG コードの貼り付け欄が出る。
+           そこへ貼るための一発コピー。割り当ての単位が kind/variant なので、
+           向こうの種類レジストリ（src/labelTypes.js）と同じ一覧をここに持っている。 -->
+      <div class="section-title">RONDOへ渡す</div>
+      <div class="status" style="margin-bottom:8px">
+        RONDO の <code>?edit=1</code> で種類を選び、「表示のしかた」を <b>SVG</b> にすると
+        貼り付け欄が出ます。そこへ貼るためのコピーです。
+      </div>
+      <div class="field">
+        <label>種類</label>
+        <select id="rondoKind" class="sel"></select>
+      </div>
+      <div class="field">
+        <label>どれに割り当てるか</label>
+        <select id="rondoVariant" class="sel"></select>
+      </div>
+      <button class="btn primary" id="copySvgBtn">SVGコードをコピー</button>
+      <button class="btn" id="copyJsonBtn">layout.json用のJSONをコピー</button>
+      <div class="status" id="rondoStatus">キー: —</div>
+
+      <div class="divider"></div>
+
+      <!-- 連作：区分名なら12＋編成月で13個。1個ずつ作っては溜めていき、
+           最後にまとめて layout.json に流し込む。?edit=1 には一括取り込みが
+           無いので、まとめる側はJSONで渡す。 -->
+      <div class="section-title">連作</div>
+      <div class="status" style="margin-bottom:8px">
+        上で選んだ種類の一覧です。1つ描くごとに「取り込む」で溜めていき、最後に
+        「まとめて書き出す」で <code>src/layout.json</code> の <code>types</code> に足せる形にします。
+      </div>
+      <button class="btn primary" id="slotCaptureBtn">いまの絵を取り込む</button>
+      <div id="slotList" class="slot-list"></div>
+      <div class="preset-row">
+        <button class="btn" id="slotExportBtn">まとめて書き出す</button>
+        <button class="btn" id="slotCopyBtn">まとめてコピー</button>
+      </div>
+      <div class="status" id="slotStatus">—</div>
 
       <div class="divider"></div>
 
@@ -416,9 +530,25 @@
   var manualPoints = [];   // {x,y,r,sizeRand}
   var manualLines = [];    // {x1,y1,x2,y2}
 
+  // 点の打ち方を再現できるようにするための乱数。同じ種(seed)なら必ず同じ点配置になる。
+  // これがあるので「連作」で保存した絵を開き直すと前と同じ点が戻ってくるし、
+  // 点の数だけ変えたときに絵全体が総入れ替えにならずに済む。
+  // 総入れ替えしたいときは「再生成」を押す（種を引き直す）。
+  var seed = (Math.random() * 4294967296) >>> 0;
+  function mulberry32(a){
+    return function(){
+      a |= 0; a = (a + 0x6D2B79F5) | 0;
+      var t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  var rnd = mulberry32(seed);
+
   var refImg = document.getElementById('refImg');
   var outputStage = document.getElementById('outputStage');
   var stageWrap = document.getElementById('stageWrap');
+  var stageInner = document.getElementById('stageInner');
   var statusEl = document.getElementById('status');
   var hintText = document.getElementById('hintText');
 
@@ -454,7 +584,9 @@
     lineCurve: document.getElementById('lineCurve'),
     autoConstellation: document.getElementById('autoConstellation'),
     constellationDist: document.getElementById('constellationDist'),
-    constellationMax: document.getElementById('constellationMax')
+    constellationMax: document.getElementById('constellationMax'),
+    sketchWidth: document.getElementById('sketchWidth'),
+    sketchFill: document.getElementById('sketchFill')
   };
   var valEls = {
     count: document.getElementById('valCount'),
@@ -476,7 +608,8 @@
     lineWidth: document.getElementById('valLineWidth'),
     lineCurve: document.getElementById('valLineCurve'),
     constellationDist: document.getElementById('valConstellationDist'),
-    constellationMax: document.getElementById('valConstellationMax')
+    constellationMax: document.getElementById('valConstellationMax'),
+    sketchWidth: document.getElementById('valSketchWidth')
   };
 
   // Digit precision for each slider's paired number field. Single source of
@@ -487,7 +620,8 @@
     twinkleSpeed:1, twinkleAmount:2,
     sparkSpikes:0, sparkSharpness:2,
     eraserSize:0, lineWidth:1, lineCurve:2,
-    constellationDist:0, constellationMax:0
+    constellationDist:0, constellationMax:0,
+    sketchWidth:0
   };
 
   function fmt(id, digits){
@@ -735,11 +869,11 @@
     var attempts = 0;
     while (points.length < count && attempts < maxAttempts){
       attempts++;
-      var x = Math.random()*w, y = Math.random()*h;
+      var x = rnd()*w, y = rnd()*h;
       var px = Math.min(w-1, Math.max(0, x|0));
       var py = Math.min(h-1, Math.max(0, y|0));
       var d = density[py*w+px];
-      if (Math.random() > d) continue;
+      if (rnd() > d) continue;
       var cx = (x/cell)|0, cy = (y/cell)|0;
       var ok = true;
       for (var gy=Math.max(0,cy-1); gy<=Math.min(rows-1,cy+1) && ok; gy++){
@@ -756,7 +890,7 @@
       if (!ok) continue;
       var gi = idxOf(cx,cy);
       if (!grid[gi]) grid[gi] = [];
-      var pt = { x:x, y:y, d:density[py*w+px], sizeRand: 0.3 + Math.random()*1.5, rot: Math.random()*Math.PI*2 };
+      var pt = { x:x, y:y, d:density[py*w+px], sizeRand: 0.3 + rnd()*1.5, rot: rnd()*Math.PI*2 };
       grid[gi].push(pt);
       points.push(pt);
     }
@@ -824,6 +958,20 @@
     return out;
   }
 
+  // 数値を短く書く（12.0 → 12、0.50 → 0.5）。点1つにつき数字が6個前後入るので、
+  // ここの1文字が書き出しサイズにそのまま効く。RONDOへはSVGを丸ごと
+  // layout.json に埋め込むため、無駄な桁は落としておきたい。
+  function num(v, d){
+    var t = v.toFixed(d);
+    if (t.indexOf('.') >= 0) t = t.replace(/0+$/, '').replace(/\.$/, '');
+    return t === '-0' ? '0' : t;
+  }
+  function fmtBytes(n){
+    if (n < 1024) return n + ' B';
+    if (n < 1048576) return Math.round(n/1024) + ' KB';
+    return (n/1048576).toFixed(1) + ' MB';
+  }
+
   // -------------------------------------------------------------- render --
   var cachedAutoPoints = [];
 
@@ -834,6 +982,7 @@
   // leave the rest of the cloud untouched.
   function regenerateAuto(){
     if (!srcW || !srcH) return;
+    rnd = mulberry32(seed); // 同じ種から引き直す＝同じ点配置になる
     var img = srcCtx.getImageData(0,0,srcW,srcH).data;
     var n = srcW*srcH;
     var lum = new Float32Array(n);
@@ -868,6 +1017,13 @@
     var autoPoints = cachedAutoPoints.filter(function(pt){ return !inErasedRegion(pt.x, pt.y); });
     var allPoints = autoPoints.concat(manualPoints.filter(function(pt){ return !inErasedRegion(pt.x, pt.y); }));
     currentPoints = allPoints;
+
+    // SVGの id と、<style> に書いたクラス名・@keyframes 名は「貼り付け先の文書全体」で
+    // 共有される。RONDO は区分ごとの絵を同じページに何枚も並べるので、名前が素のままだと
+    // 13枚が互いのぼかし具合やアニメーションを奪い合う（url(#dotBlur) は文書内で最初に
+    // 見つかった一つを指すため）。種(seed)から作った接尾辞を付けて衝突を避ける。
+    // 種は絵ごとに決まっているので、同じ絵なら何度書き出しても同じ名前になる。
+    var uid = seed.toString(36);
 
     var baseR = parseFloat(controls.size.value);
     var variance = parseFloat(controls.variance.value);
@@ -916,7 +1072,7 @@
       for (var i=0; i<total; i++){
         var r = (i % 2 === 0) ? rOuter : rInner;
         var ang = rot + (Math.PI*2*i)/total;
-        pts.push((cx+Math.cos(ang)*r).toFixed(1) + ',' + (cy+Math.sin(ang)*r).toFixed(1));
+        pts.push(num(cx+Math.cos(ang)*r, 1) + ',' + num(cy+Math.sin(ang)*r, 1));
       }
       return pts.join(' ');
     }
@@ -928,14 +1084,14 @@
       var rr = baseR * (0.7 + 0.6*pt.d) * sizeMul;
       var extraAttrs = '';
       if (useSourceColor) extraAttrs += ' fill="'+sampleColor(pt.x, pt.y)+'"';
-      if (twinkle) extraAttrs += ' class="twk a'+(k % TWINKLE_BUCKETS)+'"';
+      if (twinkle) extraAttrs += ' class="t'+uid+' a'+uid+'_'+(k % TWINKLE_BUCKETS)+'"';
       if (dotShape === 'spark'){
         var rot = pt.rot || 0;
         circlesHalo += '<polygon points="'+sparkPolygon(pt.x, pt.y, rr*haloSpread*1.6, rot)+'"'+extraAttrs+'/>';
         circlesCore += '<polygon points="'+sparkPolygon(pt.x, pt.y, rr*1.6, rot)+'"'+extraAttrs+'/>';
       } else {
-        circlesHalo += '<circle cx="'+pt.x.toFixed(1)+'" cy="'+pt.y.toFixed(1)+'" r="'+(rr*haloSpread).toFixed(2)+'"'+extraAttrs+'/>';
-        circlesCore += '<circle cx="'+pt.x.toFixed(1)+'" cy="'+pt.y.toFixed(1)+'" r="'+rr.toFixed(2)+'"'+extraAttrs+'/>';
+        circlesHalo += '<circle cx="'+num(pt.x,1)+'" cy="'+num(pt.y,1)+'" r="'+num(rr*haloSpread,2)+'"'+extraAttrs+'/>';
+        circlesCore += '<circle cx="'+num(pt.x,1)+'" cy="'+num(pt.y,1)+'" r="'+num(rr,2)+'"'+extraAttrs+'/>';
       }
     }
 
@@ -959,7 +1115,7 @@
       var curve = parseFloat(controls.lineCurve.value);
       var cx = mx + px*curve*dist*0.5;
       var cy = my + py*curve*dist*0.5;
-      linesSvg += '<path d="M'+ln.x1.toFixed(1)+','+ln.y1.toFixed(1)+' Q'+cx.toFixed(1)+','+cy.toFixed(1)+' '+ln.x2.toFixed(1)+','+ln.y2.toFixed(1)+'" fill="none" stroke="'+lc+'" stroke-width="'+lw+'" stroke-linecap="round" opacity="0.85"/>';
+      linesSvg += '<path d="M'+num(ln.x1,1)+','+num(ln.y1,1)+' Q'+num(cx,1)+','+num(cy,1)+' '+num(ln.x2,1)+','+num(ln.y2,1)+'" fill="none" stroke="'+lc+'" stroke-width="'+lw+'" stroke-linecap="round" opacity="0.85"/>';
     }
 
     // "点の中心から外側へグラデーション": a per-dot radial gradient, not a
@@ -968,12 +1124,12 @@
     // mark gets its own independent center→edge gradient scaled to its own
     // bounding box — i.e. each individual point glows from its own center.
     var gradDef = useGradient
-      ? '<radialGradient id="dotGrad" cx="50%" cy="50%" r="50%">' +
+      ? '<radialGradient id="dotGrad'+uid+'" cx="50%" cy="50%" r="50%">' +
           '<stop offset="0%" stop-color="'+coreColor+'"/>' +
           '<stop offset="100%" stop-color="'+color2+'"/>' +
         '</radialGradient>'
       : '';
-    var coreFill = useGradient ? 'url(#dotGrad)' : coreColor;
+    var coreFill = useGradient ? 'url(#dotGrad'+uid+')' : coreColor;
 
     // 加算合成。plus-lighter は色をそのまま足し合わせるので、three.js の
     // AdditiveBlending と同じ見え方になる。対応していない環境では screen に落ちる。
@@ -985,34 +1141,37 @@
       var delayStep = twinkleSpeed / TWINKLE_BUCKETS;
       var delayRules = '';
       for (var tb=0; tb<TWINKLE_BUCKETS; tb++){
-        delayRules += '.a'+tb+'{animation-delay:-'+(tb*delayStep).toFixed(2)+'s}';
+        delayRules += '.a'+uid+'_'+tb+'{animation-delay:-'+(tb*delayStep).toFixed(2)+'s}';
       }
-      twinkleStyle = '<style>@keyframes twk{0%,100%{opacity:1}50%{opacity:'+Math.max(0,1-twinkleAmount).toFixed(2)+'}}' +
-        '.twk{animation:twk '+twinkleSpeed.toFixed(1)+'s ease-in-out infinite}' + delayRules + '</style>';
+      twinkleStyle = '<style>@keyframes k'+uid+'{0%,100%{opacity:1}50%{opacity:'+Math.max(0,1-twinkleAmount).toFixed(2)+'}}' +
+        '.t'+uid+'{animation:k'+uid+' '+twinkleSpeed.toFixed(1)+'s ease-in-out infinite}' + delayRules + '</style>';
     }
 
     var svg =
       '<svg viewBox="0 0 '+srcW+' '+srcH+'" xmlns="http://www.w3.org/2000/svg">' +
         twinkleStyle +
         '<defs>' +
-          '<filter id="dotBlur" x="-100%" y="-100%" width="300%" height="300%">' +
-            '<feGaussianBlur stdDeviation="'+(baseR*haloBlur || 0.001).toFixed(2)+'"/></filter>' +
-          '<filter id="coreBlurFilter" x="-100%" y="-100%" width="300%" height="300%">' +
-            '<feGaussianBlur stdDeviation="'+(baseR*coreBlur || 0.001).toFixed(2)+'"/></filter>' +
+          '<filter id="dotBlur'+uid+'" x="-100%" y="-100%" width="300%" height="300%">' +
+            '<feGaussianBlur stdDeviation="'+num(baseR*haloBlur || 0.001, 2)+'"/></filter>' +
+          '<filter id="coreBlur'+uid+'" x="-100%" y="-100%" width="300%" height="300%">' +
+            '<feGaussianBlur stdDeviation="'+num(baseR*coreBlur || 0.001, 2)+'"/></filter>' +
           gradDef +
         '</defs>' +
         '<g stroke="none">'+linesSvg+'</g>' +
         // 加算合成：重なった点ほど明るくなる。three.js の AdditiveBlending と同じ見え方で、
         // 「光が重なっている」感じが出る。isolation:isolate で、背景まで巻き込まないようにする。
         (additive ? '<g style="isolation:isolate">' : '') +
-        '<g fill="'+haloColor+'" opacity="'+haloOpacity+'" filter="url(#dotBlur)"'+blendAttr+'>'+circlesHalo+'</g>' +
-        '<g fill="'+coreFill+'" opacity="'+coreOpacity+'" filter="url(#coreBlurFilter)"'+blendAttr+'>'+circlesCore+'</g>' +
+        '<g fill="'+haloColor+'" opacity="'+haloOpacity+'" filter="url(#dotBlur'+uid+')"'+blendAttr+'>'+circlesHalo+'</g>' +
+        '<g fill="'+coreFill+'" opacity="'+coreOpacity+'" filter="url(#coreBlur'+uid+')"'+blendAttr+'>'+circlesCore+'</g>' +
         (additive ? '</g>' : '') +
       '</svg>';
 
     outputStage.innerHTML = svg;
     lastDataURL = svg;
-    statusEl.textContent = '点の数: ' + allPoints.length + ' (自動 ' + autoPoints.length + ' / 手動 ' + manualPoints.length + ')';
+    statusEl.textContent = '点の数: ' + allPoints.length + ' (自動 ' + autoPoints.length +
+      ' / 手動 ' + manualPoints.length + ')　SVG 約' + fmtBytes(svg.length);
+    // 書き出しサイズはRONDOに埋め込むときに効いてくるので、常に見えるところに出す。
+    if (rondoStatusEl) updateRondoStatus();
   }
 
   var GENERATION_KEYS = { count:1, blend:1, gamma:1, pack:1, brightMode:1 };
@@ -1058,7 +1217,10 @@
   controls.useSourceColor.addEventListener('change', updateColorModeVisibility);
   updateColorModeVisibility();
 
-  document.getElementById('reshuffleBtn').addEventListener('click', regenerateAuto);
+  document.getElementById('reshuffleBtn').addEventListener('click', function(){
+    seed = (Math.random() * 4294967296) >>> 0; // 押したときだけ点を総入れ替えする
+    regenerateAuto();
+  });
   document.getElementById('clearManualBtn').addEventListener('click', function(){
     eraseRegions = []; manualPoints = []; manualLines = [];
     render();
@@ -1074,13 +1236,15 @@
     var w = imgEl.naturalWidth || imgEl.width;
     var h = imgEl.naturalHeight || imgEl.height;
     var scale = Math.min(1, WORK_MAX / Math.max(w,h));
-    srcW = Math.max(1, Math.round(w*scale));
-    srcH = Math.max(1, Math.round(h*scale));
-    srcCanvas.width = srcW;
-    srcCanvas.height = srcH;
-    srcCtx.drawImage(imgEl, 0, 0, srcW, srcH);
-    refImg.src = imgEl.src;
+    var bw = Math.max(1, Math.round(w*scale));
+    var bh = Math.max(1, Math.round(h*scale));
+    // 読み込んだ写真は「下絵の土台」として持つ。この上に線を描き足せる。
+    sketchBase.width = bw; sketchBase.height = bh;
+    sketchBaseCtx.drawImage(imgEl, 0, 0, bw, bh);
+    sketchStrokes = []; sketchDraft = null;
     eraseRegions = []; manualPoints = []; manualLines = [];
+    composeSource();
+    paintSketchView();
     regenerateAuto();
   }
   function loadFile(file){
@@ -1145,15 +1309,19 @@
   // -------------------------------------------------------- tool modes --
   var mode = 'view';
   var toolButtons = Array.prototype.slice.call(document.querySelectorAll('.tool[data-mode]'));
+  // 「白紙にする」や下絵の筆を押したときにも同じ切り替えが要るので、関数にまとめてある。
+  function setMode(m){
+    mode = m;
+    toolButtons.forEach(function(b){ b.setAttribute('aria-pressed', String(b.getAttribute('data-mode') === m)); });
+    stageWrap.classList.remove('mode-erase','mode-add','mode-line','mode-sketch');
+    if (m !== 'view') stageWrap.classList.add('mode-'+m);
+    hintText.style.display = m === 'view' ? '' : 'none';
+    lineAnchor = null;
+    if (sketchToolsEl) sketchToolsEl.style.display = m === 'sketch' ? 'flex' : 'none';
+    if (m === 'sketch') paintSketchView();
+  }
   toolButtons.forEach(function(btn){
-    btn.addEventListener('click', function(){
-      mode = btn.getAttribute('data-mode');
-      toolButtons.forEach(function(b){ b.setAttribute('aria-pressed', String(b === btn)); });
-      stageWrap.classList.remove('mode-erase','mode-add','mode-line');
-      if (mode !== 'view') stageWrap.classList.add('mode-'+mode);
-      hintText.style.display = mode === 'view' ? '' : 'none';
-      lineAnchor = null;
-    });
+    btn.addEventListener('click', function(){ setMode(btn.getAttribute('data-mode')); });
   });
 
   // ------------------------------------------------------- before/after --
@@ -1174,9 +1342,7 @@
     compareToggleBtn.setAttribute('aria-pressed', String(comparing));
     stageWrap.classList.toggle('comparing', comparing);
     if (comparing){
-      mode = 'view';
-      toolButtons.forEach(function(b){ b.setAttribute('aria-pressed', String(b.getAttribute('data-mode') === 'view')); });
-      stageWrap.classList.remove('mode-erase','mode-add','mode-line');
+      setMode('view');
       hintText.style.display = 'none';
       setReveal(50);
     } else {
@@ -1191,7 +1357,7 @@
   compareHandle.addEventListener('pointermove', function(e){
     if (!compareDragging) return;
     e.stopPropagation();
-    var rect = stageWrap.getBoundingClientRect();
+    var rect = stageInner.getBoundingClientRect();
     setReveal(((e.clientX - rect.left) / rect.width) * 100);
   });
   ['pointerup','pointercancel'].forEach(function(ev){
@@ -1240,6 +1406,15 @@
     } else if (mode === 'line'){
       var snap = nearestPoint(loc.x, loc.y, 30);
       lineAnchor = snap || loc;
+    } else if (mode === 'sketch'){
+      sketchDraft = {
+        shape: sketchShape === 'erase' ? 'free' : sketchShape,
+        erase: sketchShape === 'erase',
+        fill: controls.sketchFill.checked,
+        w: parseFloat(controls.sketchWidth.value),
+        pts: [loc]
+      };
+      paintSketchView();
     }
   });
   stageWrap.addEventListener('pointermove', function(e){
@@ -1255,10 +1430,27 @@
         lastAddPos = loc;
         scheduleRender();
       }
+    } else if (mode === 'sketch' && sketchDraft){
+      // 引いている最中は薄い層だけ描き替える。点描まで打ち直すと重すぎるので、
+      // 実際の点描は指を離したとき（下の pointerup）に一度だけやる。
+      if (sketchDraft.shape === 'free') sketchDraft.pts.push(loc);
+      else if (sketchDraft.pts.length < 2) sketchDraft.pts.push(loc);
+      else sketchDraft.pts[1] = loc;
+      paintSketchView();
     }
   });
   ['pointerup','pointerleave','pointercancel'].forEach(function(ev){
     stageWrap.addEventListener(ev, function(e){
+      if (sketchDraft){
+        // pointerup でも leave/cancel でも、引きかけの線は必ず片付ける。
+        if (sketchDraft.shape === 'free' && sketchDraft.pts.length === 1){
+          // 点をひとつ打っただけ。ごく短い線分にして、丸い点として残す。
+          sketchDraft.pts.push({ x: sketchDraft.pts[0].x + 0.01, y: sketchDraft.pts[0].y });
+        }
+        if (sketchDraft.pts.length >= 2) sketchStrokes.push(sketchDraft);
+        sketchDraft = null;
+        commitSketch();
+      }
       if (mode === 'line' && lineAnchor && ev === 'pointerup'){
         var loc = svgPoint(e);
         if (loc){
@@ -1274,23 +1466,421 @@
     });
   });
 
+  // ------------------------------------------------------------- 下絵 --
+  // 点描の元になる画像（srcCanvas）は、次の2つを毎回焼き直して作る:
+  //   sketchBase   … 読み込んだ写真、または白紙
+  //   sketchStrokes … その上に描いた線（ベクタのまま保持）
+  // 線をベクタで持つのは「一つ戻す」が pop() だけで済むから。ラスタに焼き込むと
+  // 戻すために履歴画像を何枚も抱えることになる。
+  var sketchBase = document.createElement('canvas');
+  var sketchBaseCtx = sketchBase.getContext('2d');
+  var sketchStrokes = [];   // {shape:'free'|'line'|'circle'|'rect', erase, fill, w, pts:[{x,y}]}
+  var sketchDraft = null;   // 引いている最中の1本
+  var sketchShape = 'free';
+  var sketchView = document.getElementById('sketchView');
+  var sketchViewCtx = sketchView.getContext('2d');
+  var sketchToolsEl = document.getElementById('sketchTools');
+
+  function setBlankBase(w, h){
+    sketchBase.width = w; sketchBase.height = h;
+    sketchBaseCtx.fillStyle = '#ffffff';
+    sketchBaseCtx.fillRect(0, 0, w, h);
+  }
+
+  // ink/eraseInk を渡すと色を差し替えて描ける。プレビュー層では
+  // 「描いた線」と「消した線」を別の色で見せるために使う。
+  function paintStrokes(ctx, list, ink, eraseInk){
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    for (var i=0; i<list.length; i++){
+      var st = list[i];
+      if (!st || !st.pts || st.pts.length < 2) continue;
+      var col = st.erase ? (eraseInk || '#ffffff') : (ink || '#000000');
+      ctx.strokeStyle = col; ctx.fillStyle = col;
+      ctx.lineWidth = st.w;
+      var a = st.pts[0], b = st.pts[st.pts.length-1];
+      ctx.beginPath();
+      if (st.shape === 'line'){
+        ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+      } else if (st.shape === 'circle'){
+        ctx.arc(a.x, a.y, Math.hypot(b.x-a.x, b.y-a.y), 0, Math.PI*2);
+        if (st.fill) ctx.fill(); else ctx.stroke();
+      } else if (st.shape === 'rect'){
+        ctx.rect(Math.min(a.x,b.x), Math.min(a.y,b.y), Math.abs(b.x-a.x), Math.abs(b.y-a.y));
+        if (st.fill) ctx.fill(); else ctx.stroke();
+      } else {
+        ctx.moveTo(a.x, a.y);
+        for (var k=1; k<st.pts.length; k++) ctx.lineTo(st.pts[k].x, st.pts[k].y);
+        ctx.stroke();
+      }
+    }
+  }
+
+  // 下絵を srcCanvas に焼き直す。点描が読むのはここだけ。
+  function composeSource(){
+    if (!sketchBase.width) return;
+    srcW = sketchBase.width; srcH = sketchBase.height;
+    srcCanvas.width = srcW; srcCanvas.height = srcH;
+    srcCtx.drawImage(sketchBase, 0, 0);
+    paintStrokes(srcCtx, sketchStrokes);
+    refImg.src = srcCanvas.toDataURL();
+  }
+
+  // 描いている最中に見せる層。白い紙をそのまま重ねると点描が見えなくなるので、
+  // 背景は透明のまま、線だけを色で描く（消した線はオレンジで見える）。
+  function paintSketchView(){
+    if (!sketchBase.width) return;
+    if (sketchView.width !== sketchBase.width || sketchView.height !== sketchBase.height){
+      sketchView.width = sketchBase.width;
+      sketchView.height = sketchBase.height;
+    }
+    sketchViewCtx.clearRect(0, 0, sketchView.width, sketchView.height);
+    paintStrokes(sketchViewCtx, sketchStrokes, '#7fb4ff', '#f08a72');
+    if (sketchDraft) paintStrokes(sketchViewCtx, [sketchDraft], '#ffffff', '#f08a72');
+  }
+
+  function commitSketch(){
+    composeSource();
+    paintSketchView();
+    regenerateAuto();
+  }
+
+  document.getElementById('blankBtn').addEventListener('click', function(){
+    setBlankBase(WORK_MAX, WORK_MAX);
+    sketchStrokes = []; sketchDraft = null;
+    eraseRegions = []; manualPoints = []; manualLines = [];
+    commitSketch();
+    setMode('sketch');
+  });
+  document.getElementById('sketchUndoBtn').addEventListener('click', function(){
+    if (!sketchStrokes.length) return;
+    sketchStrokes.pop();
+    commitSketch();
+  });
+  document.getElementById('sketchClearBtn').addEventListener('click', function(){
+    sketchStrokes = []; sketchDraft = null;
+    commitSketch();
+  });
+
+  var shapeButtons = Array.prototype.slice.call(document.querySelectorAll('.tool[data-shape]'));
+  shapeButtons.forEach(function(btn){
+    btn.addEventListener('click', function(){
+      sketchShape = btn.getAttribute('data-shape');
+      shapeButtons.forEach(function(b){ b.setAttribute('aria-pressed', String(b === btn)); });
+      setMode('sketch');
+    });
+  });
+
+  // -------------------------------------------------------- RONDOへ渡す --
+  // RONDO 側の種類レジストリ（rondo-cosmos/src/labelTypes.js）の写し。
+  // 割り当ての単位が「札のID」ではなく kind/variant なので、キーを手打ちさせず
+  // 一覧から選ばせる。日付や番号がそのまま出る種類（区分の新月日付・旧暦・
+  // 月の日番号）は、絵に置き換える意味が薄いのでここには載せていない。
+  var YEAR_SEGMENT_ROWS = [
+    ['dk1','下降高次①'], ['dk2','下降高次②'], ['ds1','下降精神①'], ['ds2','下降精神②'],
+    ['dt1','下降基底①'], ['dt2','下降基底②'], ['jt1','上昇基底①'], ['jt2','上昇基底②'],
+    ['js1','上昇精神①'], ['js2','上昇精神②'], ['jk1','上昇高次①'], ['jk2','上昇高次②']
+  ];
+  var CYCLE19_NAMES = ['再生','放出','調整','始動','露呈','受容','成長','交流','再生','放出',
+                       '調整','始動','露呈','受容','成長','交流','受容','成長','交流'];
+  var LUNAR_ACTIONS = ['発生','始動','試行','観察','選択','決意','摩擦','限界','噴出','余波',
+                       '制御','再定義','自覚','展開','露出','反響','共鳴','疎通','交流','再評価',
+                       '調整','確認','認識','理解','受容','適応','統合','消去','埋設','虚無'];
+
+  var RONDO_TYPES = [
+    { kind:'yearSegment', name:'一年の区分名（12＋編成月）', variants:
+        YEAR_SEGMENT_ROWS.map(function(r){ return { key:r[0], name:r[1] }; })
+          .concat([{ key:'hensei', name:'編成月' }]) },
+    { kind:'zone', name:'ゾーン', variants:[
+        { key:'koji', name:'高次' }, { key:'seishin', name:'精神' }, { key:'kitei', name:'基底' }] },
+    { kind:'solstice', name:'二至二分', variants:[
+        { key:'summer', name:'夏至' }, { key:'autumn', name:'秋分' },
+        { key:'winter', name:'冬至' }, { key:'spring', name:'春分' }] },
+    { kind:'moonPhase', name:'月相', variants:[
+        { key:'firstQuarter', name:'上弦' }, { key:'full', name:'満月' }, { key:'lastQuarter', name:'下弦' }] },
+    { kind:'consciousWorld', name:'意識世界（縦環の中心）', variants:[] },
+    { kind:'realWorld', name:'現実世界（平面環の中心）', variants:[] },
+    { kind:'moonNew', name:'新月', variants:[] },
+    { kind:'cycleNumber', name:'19年の周期番号', variants:
+        CYCLE19_NAMES.map(function(nm, i){ return { key:String(i+1), name:'周期'+(i+1)+'（'+nm+'）' }; }) },
+    { kind:'lunarAction', name:'月の作用', variants:
+        LUNAR_ACTIONS.map(function(a, i){ return { key:String(i), name:(i+1)+'日目：'+a }; }) }
+  ];
+
+  var rondoKindSel = document.getElementById('rondoKind');
+  var rondoVariantSel = document.getElementById('rondoVariant');
+  var rondoStatusEl = document.getElementById('rondoStatus');
+  var slotListEl = document.getElementById('slotList');
+  var slotStatusEl = document.getElementById('slotStatus');
+
+  function typeDef(kind){
+    for (var i=0; i<RONDO_TYPES.length; i++) if (RONDO_TYPES[i].kind === kind) return RONDO_TYPES[i];
+    return null;
+  }
+  // バリアントを持たない種類は kind そのものが割り当てキーになる（resolveLabel.js の typeKey と同じ）。
+  function variantRows(kind){
+    var t = typeDef(kind);
+    if (!t) return [];
+    if (!t.variants.length) return [{ key:kind, name:t.name }];
+    // 種類だけのキーは「その種類ぜんぶの共通設定」になる。resolveEntry が
+    // types[kind] を土台にして types[kind/variant] で上書きする作りなので、
+    // グループ全部に同じ1枚を使いたいときはこちらに入れれば足りる。
+    return [{ key:kind, name:'（この種類ぜんぶ共通）' }].concat(
+      t.variants.map(function(v){ return { key: kind + '/' + v.key, name: v.name }; }));
+  }
+
+  function copyText(text, okMsg, target){
+    function fallback(){
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.cssText = 'position:fixed;top:-9999px;left:0';
+      document.body.appendChild(ta);
+      ta.select();
+      var ok = false;
+      try { ok = document.execCommand('copy'); } catch(err){ ok = false; }
+      document.body.removeChild(ta);
+      return ok;
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(
+        function(){ target.textContent = okMsg; },
+        function(){ target.textContent = fallback() ? okMsg : 'コピーできませんでした'; }
+      );
+    } else {
+      target.textContent = fallback() ? okMsg : 'コピーできませんでした';
+    }
+  }
+
+  // layout.json の types に足す形。resolveLabel.js の DEFAULT_ENTRY に合わせて
+  // render:"svg" と svg 本体だけ書く（位置・大きさは向こうの編集アプリで詰める）。
+  function entryFor(svg){ return { render:'svg', svg:svg }; }
+  function typesJson(map){ return JSON.stringify({ types: map }, null, 2) + '\n'; }
+
+  function updateRondoStatus(){
+    if (!rondoStatusEl) return;
+    rondoStatusEl.textContent = 'キー: ' + (rondoVariantSel.value || '—') +
+      '　いまのSVG 約' + fmtBytes(lastDataURL.length);
+  }
+
+  function fillVariants(){
+    var rows = variantRows(rondoKindSel.value);
+    rondoVariantSel.innerHTML = '';
+    rows.forEach(function(r){
+      var o = document.createElement('option');
+      o.value = r.key; o.textContent = r.name;
+      rondoVariantSel.appendChild(o);
+    });
+    updateRondoStatus();
+    renderSlots();
+  }
+
+  rondoKindSel.addEventListener('change', fillVariants);
+  rondoVariantSel.addEventListener('change', function(){ updateRondoStatus(); renderSlots(); });
+
+  document.getElementById('copySvgBtn').addEventListener('click', function(){
+    if (!lastDataURL){ rondoStatusEl.textContent = 'まだ絵がありません'; return; }
+    copyText(lastDataURL, 'SVGをコピーしました → ?edit=1 の「SVGコード」欄に貼ってください', rondoStatusEl);
+  });
+  document.getElementById('copyJsonBtn').addEventListener('click', function(){
+    if (!lastDataURL){ rondoStatusEl.textContent = 'まだ絵がありません'; return; }
+    var m = {};
+    m[rondoVariantSel.value] = entryFor(lastDataURL);
+    copyText(typesJson(m), 'JSONをコピーしました → layout.json の types に足してください', rondoStatusEl);
+  });
+
+  // ------------------------------------------------------------- 連作 --
+  // 1つ作るごとにスロットへ溜めて、最後にまとめて layout.json へ渡す。
+  // 保存するのは書き出し用のSVGだけでなく「作りかけの状態」一式（下絵の線・
+  // 設定・手直し・乱数の種）で、あとから開いて直せるようにしてある。
+  var SLOTS_KEY = 'stipple-tracer:rondo-slots:v1';
+  function loadSlots(){
+    try{
+      var raw = localStorage.getItem(SLOTS_KEY);
+      return raw ? JSON.parse(raw) : {};
+    } catch(err){ return {}; }
+  }
+  function saveSlots(obj){
+    try{ localStorage.setItem(SLOTS_KEY, JSON.stringify(obj)); return true; }
+    catch(err){ return false; } // 容量オーバーなど。呼んだ側でその旨を出す。
+  }
+  // プライベートウィンドウなどでは保存そのものが使えない。容量オーバーとは
+  // 打つ手が違うので（前者は「コピーで持ち出す」しかない）、切り分けて伝える。
+  function storageAvailable(){
+    try{
+      localStorage.setItem('stipple-tracer:probe', '1');
+      localStorage.removeItem('stipple-tracer:probe');
+      return true;
+    } catch(err){ return false; }
+  }
+
+  // 下絵の土台の持ち方。白地に線を引いただけの下絵はPNGでも数KBで済み、
+  // 劣化しないので開き直したとき点が1つ残らず同じ位置に戻る。写真はPNGだと
+  // 重すぎるので、大きくなったらJPEGに落とす（そのぶん開き直すと点がわずかにずれる）。
+  function encodeBase(){
+    if (!sketchBase.width) return null;
+    var png = sketchBase.toDataURL('image/png');
+    if (png.length <= 160000) return png;
+    return sketchBase.toDataURL('image/jpeg', 0.85);
+  }
+
+  function renderSlots(){
+    var slots = loadSlots();
+    var rows = variantRows(rondoKindSel.value);
+    var current = rondoVariantSel.value;
+    slotListEl.innerHTML = '';
+    rows.forEach(function(r){
+      var saved = slots[r.key];
+      var row = document.createElement('div');
+      row.className = 'slot-item' + (saved ? ' filled' : '') + (r.key === current ? ' current' : '');
+
+      var dot = document.createElement('span');
+      dot.className = 'slot-dot';
+
+      var nm = document.createElement('span');
+      nm.className = 'slot-name';
+      nm.textContent = r.name;
+      nm.style.cursor = 'pointer';
+      nm.title = r.key;
+      nm.addEventListener('click', function(){
+        rondoVariantSel.value = r.key;
+        updateRondoStatus();
+        renderSlots();
+      });
+
+      row.appendChild(dot);
+      row.appendChild(nm);
+
+      if (saved){
+        var openBtn = document.createElement('button');
+        openBtn.type = 'button';
+        openBtn.className = 'btn slot-btn';
+        openBtn.textContent = '開く';
+        openBtn.addEventListener('click', function(){ openSlot(r.key); });
+        var delBtn = document.createElement('button');
+        delBtn.type = 'button';
+        delBtn.className = 'btn slot-btn preset-del';
+        delBtn.textContent = '消';
+        delBtn.addEventListener('click', function(){
+          var cur = loadSlots();
+          delete cur[r.key];
+          saveSlots(cur);
+          slotStatusEl.textContent = r.name + ' を消しました';
+          renderSlots();
+        });
+        row.appendChild(openBtn);
+        row.appendChild(delBtn);
+      }
+      slotListEl.appendChild(row);
+    });
+    var filled = rows.filter(function(r){ return !!slots[r.key]; }).length;
+    if (!slotStatusEl.dataset.sticky) slotStatusEl.textContent = filled + ' / ' + rows.length + ' 個できています';
+  }
+
+  function captureSlot(){
+    if (!lastDataURL){ slotStatusEl.textContent = 'まだ絵がありません'; return; }
+    var key = rondoVariantSel.value;
+    var name = rondoVariantSel.options[rondoVariantSel.selectedIndex].textContent;
+    var slots = loadSlots();
+    slots[key] = {
+      name: name,
+      svg: lastDataURL,
+      seed: seed,
+      values: captureCurrentValues(),
+      base: encodeBase(),
+      strokes: sketchStrokes,
+      edits: { erase: eraseRegions, points: manualPoints, lines: manualLines },
+      updatedAt: Date.now()
+    };
+    if (saveSlots(slots)){
+      slotStatusEl.textContent = name + ' に取り込みました（約' + fmtBytes(lastDataURL.length) + '）';
+    } else {
+      slotStatusEl.textContent = storageAvailable()
+        ? '保存できませんでした。点の数を減らすか、要らないスロットを消してください'
+        : 'このブラウザでは保存が使えません。「まとめてコピー」で持ち出してください';
+    }
+    slotStatusEl.dataset.sticky = '1';
+    renderSlots();
+    delete slotStatusEl.dataset.sticky;
+  }
+
+  function openSlot(key){
+    var s = loadSlots()[key];
+    if (!s) return;
+    if (typeof s.seed === 'number') seed = s.seed;
+    sketchStrokes = s.strokes || [];
+    sketchDraft = null;
+    eraseRegions = (s.edits && s.edits.erase) || [];
+    manualPoints = (s.edits && s.edits.points) || [];
+    manualLines = (s.edits && s.edits.lines) || [];
+    PERSIST_KEYS.forEach(function(k){
+      if (s.values && Object.prototype.hasOwnProperty.call(s.values, k)) setControlValue(k, s.values[k]);
+    });
+    refreshAllLabels();
+    rondoVariantSel.value = key;
+    if (s.base){
+      var img = new Image();
+      img.onload = function(){
+        sketchBase.width = img.naturalWidth;
+        sketchBase.height = img.naturalHeight;
+        sketchBaseCtx.drawImage(img, 0, 0);
+        commitSketch();
+        slotStatusEl.textContent = (s.name || key) + ' を開きました';
+        renderSlots();
+      };
+      img.src = s.base;
+    } else {
+      commitSketch();
+      slotStatusEl.textContent = (s.name || key) + ' を開きました';
+      renderSlots();
+    }
+  }
+
+  function slotsMapForKind(){
+    var slots = loadSlots(), out = {}, n = 0;
+    variantRows(rondoKindSel.value).forEach(function(r){
+      if (slots[r.key]){ out[r.key] = entryFor(slots[r.key].svg); n++; }
+    });
+    return { map: out, count: n };
+  }
+
+  document.getElementById('slotCaptureBtn').addEventListener('click', captureSlot);
+  document.getElementById('slotExportBtn').addEventListener('click', function(){
+    var r = slotsMapForKind();
+    if (!r.count){ slotStatusEl.textContent = 'まだ何も取り込まれていません'; return; }
+    saveTextFile(typesJson(r.map), 'rondo-layout-types.json', 'application/json');
+    slotStatusEl.textContent = r.count + ' 個を書き出しました（layout.json の types に足してください）';
+  });
+  document.getElementById('slotCopyBtn').addEventListener('click', function(){
+    var r = slotsMapForKind();
+    if (!r.count){ slotStatusEl.textContent = 'まだ何も取り込まれていません'; return; }
+    copyText(typesJson(r.map), r.count + ' 個をコピーしました → layout.json の types に足してください', slotStatusEl);
+  });
+
+  function initRondoUi(){
+    RONDO_TYPES.forEach(function(t){
+      var o = document.createElement('option');
+      o.value = t.kind; o.textContent = t.name;
+      rondoKindSel.appendChild(o);
+    });
+    rondoKindSel.value = 'yearSegment';
+    fillVariants();
+  }
+
   // ------------------------------------------------- default demo image --
   // dark shape on a light background (matches the new "dark areas -> dots" default)
   function drawDemo(){
-    srcW = 380; srcH = 380;
-    srcCanvas.width = srcW; srcCanvas.height = srcH;
-    srcCtx.fillStyle = '#ffffff';
-    srcCtx.fillRect(0,0,srcW,srcH);
-    var cx = srcW*0.5, cy = srcH*0.5, r = Math.min(srcW,srcH)*0.32;
-    srcCtx.fillStyle = '#000000';
-    srcCtx.beginPath(); srcCtx.arc(cx, cy, r, 0, Math.PI*2); srcCtx.fill();
-    srcCtx.fillStyle = '#ffffff';
-    srcCtx.beginPath(); srcCtx.arc(cx + r*0.55, cy - r*0.15, r*0.92, 0, Math.PI*2); srcCtx.fill();
-    refImg.src = srcCanvas.toDataURL();
-    regenerateAuto();
+    setBlankBase(380, 380);
+    var cx = 190, cy = 190, r = 380*0.32;
+    sketchBaseCtx.fillStyle = '#000000';
+    sketchBaseCtx.beginPath(); sketchBaseCtx.arc(cx, cy, r, 0, Math.PI*2); sketchBaseCtx.fill();
+    sketchBaseCtx.fillStyle = '#ffffff';
+    sketchBaseCtx.beginPath(); sketchBaseCtx.arc(cx + r*0.55, cy - r*0.15, r*0.92, 0, Math.PI*2); sketchBaseCtx.fill();
+    sketchStrokes = [];
+    commitSketch();
   }
   refreshAllLabels();
   renderPresetList();
+  initRondoUi();
   drawDemo();
 })();
 </script>
