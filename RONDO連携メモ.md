@@ -14,9 +14,14 @@
 
 作った点描SVGを RONDO に載せる。**トレーサーは「絵を作る側」、RONDO は「絵を置く側」。**
 
-- RONDO のリポジトリ: `ym-rondo/rondo-cosmos`（このPCでは同じ GitHub フォルダの隣）
+- RONDO のリポジトリ: `ym-rondo/rondo-cosmos`（非公開）
 - RONDO の公開先: https://rondo-cosmos.vercel.app
 - このアプリの公開先: https://stipple-tracer.vercel.app
+
+このメモに出てくる `src/layout.json` や `src/labelTypes.js` は
+**rondo-cosmos 側**のパスで、点描トレーサーのフォルダの中には無い。
+RONDO のソースはこのPCにも置いてあるが、フォルダの場所は変わることがあるので、
+このメモでは「どこに置いてあるか」は決め打ちしない。見当たらなければ探すこと。
 
 ## いちばん大事な制約：光り方を揃えること
 
