@@ -3,6 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- 検索結果に出さない。
+     robots.txt で Disallow していないのは意図的で、クロールを止めると中身を
+     読まれず、この指定も読まれない。「noindex にしてある」と分かってもらえないと
+     URLだけが結果に載ることがあるため、読ませたうえで外してもらう。 -->
+<meta name="robots" content="noindex, nofollow">
 <title>点描トレーサー</title>
 <!-- アイコンは、アプリを開いたとき最初に出る三日月を点描にしたもの。
      ホーム画面に置いたときに何のアプリか分かるようにしている。
