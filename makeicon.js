@@ -48,7 +48,8 @@ function writePng(path, w, h, rgb){ // rgb: Uint8Array w*h*3
 
 // ------------------------------------------------------------- 絵づくり ----
 const BG = [0x03, 0x05, 0x0b];      // アプリの背景と同じ
-const HALO = [0x7f, 0xe0, 0xff];    // 暈の既定色（アプリを開いたときの色）
+const HALO = [0xff, 0xff, 0xff];    // 暈も白。色を入れると絵柄より色が目立つので、
+                                    // 白一色にして、暈と芯の落差だけで光に見せる
 const CORE = [0xff, 0xff, 0xff];    // 芯は純白（RONDOと同じ組み立て）
 
 function mulberry32(a){
@@ -186,7 +187,7 @@ const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">`
   + `<rect width="64" height="64" fill="#03050b"/>`
   + `<defs><filter id="b" x="-50%" y="-50%" width="200%" height="200%">`
   + `<feGaussianBlur stdDeviation="${blur}"/></filter></defs>`
-  + `<g fill="#7fe0ff" opacity=".55" filter="url(#b)">${circles}</g>`
+  + `<g fill="#fff" opacity=".55" filter="url(#b)">${circles}</g>`
   + `<g fill="#fff">${cores}</g></svg>`;
 fs.writeFileSync(ROOT + 'icon.svg', svg);
 
